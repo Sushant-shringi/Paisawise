@@ -56,7 +56,11 @@ export const Login: React.FC<{ initialMode?: 'signin' | 'signup' }> = ({ initial
       } else if (res.requiresVerification) {
         setOtpEmail(res.email || email);
         setOtpStep(true);
-        setOtpNotice('Email verification required. Please enter your 6-digit OTP code.');
+        if (res.devOtp) {
+          setDevOtpNotice(res.devOtp);
+          setOtpCode(res.devOtp);
+        }
+        setOtpNotice('Email verification required. Enter your 6-digit OTP code below.');
       } else {
         navigate('/');
       }
@@ -92,7 +96,11 @@ export const Login: React.FC<{ initialMode?: 'signin' | 'signup' }> = ({ initial
       } else if (res.requiresVerification) {
         setOtpEmail(res.email || email);
         setOtpStep(true);
-        setOtpNotice(`Verification OTP has been dispatched for ${res.email || email}. Enter it below.`);
+        if (res.devOtp) {
+          setDevOtpNotice(res.devOtp);
+          setOtpCode(res.devOtp);
+        }
+        setOtpNotice(res.message || `Verification code generated for ${res.email || email}.`);
       } else {
         navigate('/');
       }
@@ -130,13 +138,16 @@ export const Login: React.FC<{ initialMode?: 'signin' | 'signup' }> = ({ initial
   // Resend OTP handler
   const handleResendOtp = async () => {
     setError(null);
-    setDevOtpNotice(null);
     try {
       const res = await requestOtp(otpEmail);
       if (res.error) {
         setError(res.error.message);
       } else {
-        setOtpNotice('A fresh verification OTP has been dispatched.');
+        if (res.devOtp) {
+          setDevOtpNotice(res.devOtp);
+          setOtpCode(res.devOtp);
+        }
+        setOtpNotice(res.message || 'A fresh verification OTP has been generated.');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to request new OTP');
@@ -153,7 +164,7 @@ export const Login: React.FC<{ initialMode?: 'signin' | 'signup' }> = ({ initial
         const data = await res.json();
         if (data.otp) {
           setOtpCode(data.otp);
-          setDevOtpNotice(`Auto-filled local test OTP: ${data.otp}`);
+          setDevOtpNotice(data.otp);
         } else {
           setError('No active OTP found for this account.');
         }
@@ -210,10 +221,25 @@ export const Login: React.FC<{ initialMode?: 'signin' | 'signup' }> = ({ initial
             )}
 
             {devOtpNotice && (
-              <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-400/30 text-amber-200 text-xs font-semibold">
-                {devOtpNotice}
+              <div className="p-3.5 rounded-2xl bg-emerald-950/70 border border-emerald-400/40 text-left shadow-lg shadow-emerald-500/10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-xs font-bold text-emerald-300">Your Security Code:</span>
+                  </div>
+                  <span className="text-lg font-black tracking-widest text-emerald-400 bg-emerald-900/80 px-3 py-1 rounded-lg border border-emerald-400/40 font-mono">
+                    {devOtpNotice}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 mt-2 leading-relaxed">
+                  ✓ Code autofilled below. Click <strong className="text-white">Verify & Launch Dashboard</strong>.
+                </p>
               </div>
             )}
+
+            <div className="p-2.5 rounded-xl bg-slate-950/50 border border-white/10 text-center text-[11px] text-slate-400 leading-relaxed">
+              <span>Checking real email inbox? Real delivery requires Gmail or SMTP configured in <code>.env</code>. Without it, your code is displayed above!</span>
+            </div>
 
             {error && (
               <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-200 text-xs font-semibold">

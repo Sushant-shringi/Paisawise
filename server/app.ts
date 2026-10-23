@@ -12,6 +12,7 @@ import {
   getDevActiveOtp,
   AuthenticatedRequest 
 } from './auth';
+import { sendOtpEmail } from './mailer';
 
 export function createApp(db: DatabaseSync) {
   const app = express();
@@ -93,12 +94,20 @@ export function createApp(db: DatabaseSync) {
         return;
       }
 
+      // Attempt real email dispatch via nodemailer
+      const emailRes = await sendOtpEmail(normalizedEmail, otpResult.otpCode!, 'signup_verification');
+      const isDev = process.env.NODE_ENV !== 'production';
+
       res.status(201).json({
         success: true,
-        message: 'Account created successfully. A verification code has been dispatched.',
+        message: emailRes.sent 
+          ? `Account created! Verification code sent to ${normalizedEmail}.` 
+          : 'Account created! (Verification code generated).',
         userId,
         email: normalizedEmail,
-        requiresVerification: true
+        requiresVerification: true,
+        emailSent: emailRes.sent,
+        devOtp: isDev ? otpResult.otpCode : undefined
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Internal server error during registration.' });
@@ -157,33 +166,41 @@ export function createApp(db: DatabaseSync) {
   });
 
   // POST /api/auth/request-otp
-  authRouter.post('/request-otp', (req: Request, res: Response): Promise<void> => {
+  authRouter.post('/request-otp', async (req: Request, res: Response): Promise<void> => {
     try {
       const { email, purpose = 'signup_verification' } = req.body;
 
       if (!email) {
         res.status(400).json({ error: 'Email is required.' });
-        return Promise.resolve();
+        return;
       }
 
       const normalizedEmail = email.trim().toLowerCase();
       const user = db.prepare('SELECT id FROM users WHERE email = ?').get(normalizedEmail) as { id: string } | undefined;
       if (!user) {
         res.status(404).json({ error: 'No account found with this email address.' });
-        return Promise.resolve();
+        return;
       }
 
       const otpResult = createOtp(db, user.id, normalizedEmail, purpose);
       if (!otpResult.success) {
         res.status(429).json({ error: otpResult.error });
-        return Promise.resolve();
+        return;
       }
 
-      res.json({ success: true, message: 'New verification OTP dispatched.' });
-      return Promise.resolve();
+      const emailRes = await sendOtpEmail(normalizedEmail, otpResult.otpCode!, purpose);
+      const isDev = process.env.NODE_ENV !== 'production';
+
+      res.json({ 
+        success: true, 
+        message: emailRes.sent 
+          ? `New verification code dispatched to ${normalizedEmail}.` 
+          : 'New verification code generated.',
+        emailSent: emailRes.sent,
+        devOtp: isDev ? otpResult.otpCode : undefined
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to request OTP.' });
-      return Promise.resolve();
     }
   });
 
@@ -219,12 +236,18 @@ export function createApp(db: DatabaseSync) {
 
       if (user.email_verified === 0) {
         // User has not verified their OTP yet
-        createOtp(db, user.id, normalizedEmail, 'signup_verification');
+        const otpResult = createOtp(db, user.id, normalizedEmail, 'signup_verification');
+        if (otpResult.success) {
+          await sendOtpEmail(normalizedEmail, otpResult.otpCode!, 'signup_verification');
+        }
+        const isDev = process.env.NODE_ENV !== 'production';
+
         res.status(403).json({
           error: 'Email verification required.',
           requiresVerification: true,
           email: user.email,
-          userId: user.id
+          userId: user.id,
+          devOtp: isDev && otpResult.success ? otpResult.otpCode : undefined
         });
         return;
       }
@@ -279,12 +302,12 @@ export function createApp(db: DatabaseSync) {
   });
 
   // POST /api/auth/forgot-password
-  authRouter.post('/forgot-password', (req: Request, res: Response): Promise<void> => {
+  authRouter.post('/forgot-password', async (req: Request, res: Response): Promise<void> => {
     try {
       const { email } = req.body;
       if (!email) {
         res.status(400).json({ error: 'Email is required.' });
-        return Promise.resolve();
+        return;
       }
 
       const normalizedEmail = email.trim().toLowerCase();
@@ -292,15 +315,22 @@ export function createApp(db: DatabaseSync) {
       if (!user) {
         // Return 200 without leaking account absence to prevent enumeration
         res.json({ success: true, message: 'If that email exists, recovery instructions have been dispatched.' });
-        return Promise.resolve();
+        return;
       }
 
-      createOtp(db, user.id, normalizedEmail, 'password_reset');
-      res.json({ success: true, message: 'Password recovery OTP dispatched.' });
-      return Promise.resolve();
+      const otpResult = createOtp(db, user.id, normalizedEmail, 'password_reset');
+      if (otpResult.success) {
+        await sendOtpEmail(normalizedEmail, otpResult.otpCode!, 'password_reset');
+      }
+      const isDev = process.env.NODE_ENV !== 'production';
+
+      res.json({ 
+        success: true, 
+        message: 'Password recovery code dispatched.',
+        devOtp: isDev && otpResult.success ? otpResult.otpCode : undefined
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to process password recovery.' });
-      return Promise.resolve();
     }
   });
 

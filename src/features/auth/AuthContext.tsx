@@ -15,12 +15,12 @@ interface AuthContextType {
   isLoading: boolean;
   isDemoMode: boolean;
   toggleDemoMode: (enabled?: boolean) => void;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null; requiresVerification?: boolean; email?: string }>;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null; requiresVerification?: boolean; email?: string }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null; requiresVerification?: boolean; email?: string; devOtp?: string; message?: string }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null; requiresVerification?: boolean; email?: string; devOtp?: string; message?: string }>;
   verifyOtp: (email: string, otpCode: string, purpose?: string) => Promise<{ error: Error | null }>;
-  requestOtp: (email: string, purpose?: string) => Promise<{ error: Error | null }>;
+  requestOtp: (email: string, purpose?: string) => Promise<{ error: Error | null; devOtp?: string; message?: string }>;
   signOut: () => Promise<void>;
-  resetPassword: (email: string) => Promise<{ error: Error | null }>;
+  resetPassword: (email: string) => Promise<{ error: Error | null; devOtp?: string; message?: string }>;
   updatePassword: (password: string, otpCode?: string, email?: string) => Promise<{ error: Error | null }>;
   refreshProfile: () => Promise<void>;
 }
@@ -178,7 +178,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const data = await res.json();
 
         if (res.status === 403 && data.requiresVerification) {
-          return { error: null, requiresVerification: true, email: data.email };
+          return { 
+            error: null, 
+            requiresVerification: true, 
+            email: data.email,
+            devOtp: data.devOtp 
+          };
         }
 
         if (!res.ok) {
@@ -225,7 +230,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { 
           error: null, 
           requiresVerification: true, 
-          email: data.email 
+          email: data.email,
+          devOtp: data.devOtp,
+          message: data.message
         };
       } catch (err: any) {
         return { error: new Error(err.message || 'Network error connecting to local server') };
@@ -290,7 +297,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error: new Error(data.error || 'Failed to request new code') };
       }
 
-      return { error: null };
+      return { error: null, devOtp: data.devOtp, message: data.message };
     } catch (err: any) {
       return { error: new Error(err.message || 'Network error requesting OTP') };
     }

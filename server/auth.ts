@@ -73,7 +73,7 @@ export function createOtp(
   userId: string, 
   email: string, 
   purpose: 'signup_verification' | 'password_reset' = 'signup_verification'
-): { success: boolean; error?: string } {
+): { success: boolean; error?: string; otpCode?: string } {
   // Check rate limit: Check recent OTP requests within RATE_LIMIT_SECONDS
   const recentOtp = db.prepare(`
     SELECT created_at FROM otps 
@@ -106,8 +106,7 @@ export function createOtp(
     VALUES (?, ?, ?, ?, ?, 0, ?, ?, NULL, ?)
   `).run(id, userId, email, otpCode, purpose, MAX_OTP_ATTEMPTS, expiresAt, now.toISOString());
 
-  // Note: We do NOT log the OTP to stdout/stderr or expose it in production!
-  return { success: true };
+  return { success: true, otpCode };
 }
 
 export function verifyOtp(
