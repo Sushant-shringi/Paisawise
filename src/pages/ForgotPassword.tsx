@@ -68,19 +68,22 @@ export const ForgotPassword: React.FC = () => {
               <CheckCircle2 className="w-6 h-6" />
             </div>
             <h3 className="text-base font-bold text-white">
-              Password Reset Link Sent
+              Password Recovery Code Dispatched
             </h3>
             <p className="text-xs text-slate-300 leading-relaxed">
-              We've dispatched recovery instructions to <strong className="text-white">{email}</strong>. Check your inbox and spam folder.
+              We've dispatched recovery instructions to <strong className="text-emerald-400">{email}</strong>.
             </p>
-            <div className="pt-3">
-              <Link to="/login">
+            <div className="pt-3 space-y-2.5">
+              <Link to={`/reset-password?email=${encodeURIComponent(email)}`}>
                 <button
                   type="button"
                   className="w-full py-3 px-4 rounded-xl font-extrabold text-sm text-slate-950 bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 hover:from-emerald-300 hover:to-teal-300 shadow-lg shadow-emerald-500/25 active:scale-[0.98] transition-all"
                 >
-                  Return to Sign In
+                  Enter Recovery Code & Reset Password
                 </button>
+              </Link>
+              <Link to="/login" className="block text-center text-xs text-slate-400 hover:text-white pt-1">
+                Return to Sign In
               </Link>
             </div>
           </div>

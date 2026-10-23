@@ -7,7 +7,7 @@ import {
   RecurringExpense, 
   Subscription, 
   NotificationItem, 
-  GoogleSheetConnection,
+  GoogleSheetConnection, 
   Profile 
 } from '@/types';
 import { 
@@ -20,7 +20,7 @@ import {
   INITIAL_NOTIFICATIONS 
 } from '@/lib/mockData';
 
-// State container for Demo mode session (in-memory for session)
+// State container for Demo mode session (in-memory for demo session)
 let demoCategories: Category[] = [...INITIAL_CATEGORIES];
 let demoTransactions: Transaction[] = [...INITIAL_TRANSACTIONS];
 let demoBudgets: Budget[] = [...INITIAL_BUDGETS];
@@ -30,12 +30,36 @@ let demoSubscriptions: Subscription[] = [...INITIAL_SUBSCRIPTIONS];
 let demoNotifications: NotificationItem[] = [...INITIAL_NOTIFICATIONS];
 let demoSheetConnection: GoogleSheetConnection | null = null;
 
+function getLocalToken(): string | null {
+  return typeof window !== 'undefined' ? localStorage.getItem('paisawise_jwt_token') : null;
+}
+
+function getLocalHeaders(): Record<string, string> {
+  const token = getLocalToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+  };
+}
+
 export const supabaseApi = {
   // ---------------------------------------------------------------------------
   // AUTH & PROFILES
   // ---------------------------------------------------------------------------
   async getProfile(userId: string): Promise<Profile | null> {
     if (!isSupabaseConfigured) {
+      const token = getLocalToken();
+      if (token) {
+        try {
+          const res = await fetch('/api/auth/me', { headers: getLocalHeaders() });
+          if (res.ok) {
+            const data = await res.json();
+            return data.profile;
+          }
+        } catch {
+          // Fallback to local default
+        }
+      }
       return {
         id: userId,
         full_name: 'Aditya Sharma',
@@ -78,7 +102,18 @@ export const supabaseApi = {
   // CATEGORIES
   // ---------------------------------------------------------------------------
   async getCategories(userId?: string): Promise<Category[]> {
-    if (!isSupabaseConfigured || !userId) {
+    if (!isSupabaseConfigured) {
+      const token = getLocalToken();
+      if (token) {
+        try {
+          const res = await fetch('/api/categories', { headers: getLocalHeaders() });
+          if (res.ok) {
+            return await res.json();
+          }
+        } catch {
+          // Fallback to demo
+        }
+      }
       return demoCategories;
     }
     const { data, error } = await supabase
@@ -96,6 +131,15 @@ export const supabaseApi = {
 
   async createCategory(category: Omit<Category, 'id'>, isDemo: boolean = false): Promise<Category> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        const res = await fetch('/api/categories', {
+          method: 'POST',
+          headers: getLocalHeaders(),
+          body: JSON.stringify(category)
+        });
+        if (res.ok) return await res.json();
+      }
       const newCat: Category = {
         ...category,
         id: `cat-${Date.now()}`,
@@ -119,6 +163,15 @@ export const supabaseApi = {
   // ---------------------------------------------------------------------------
   async getTransactions(userId?: string, isDemo: boolean = false): Promise<Transaction[]> {
     if (!isSupabaseConfigured || isDemo || !userId) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        try {
+          const res = await fetch('/api/transactions', { headers: getLocalHeaders() });
+          if (res.ok) return await res.json();
+        } catch {
+          // Fallback to demo
+        }
+      }
       return [...demoTransactions].sort((a, b) => 
         new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()
       );
@@ -139,6 +192,15 @@ export const supabaseApi = {
 
   async createTransaction(transaction: Omit<Transaction, 'id' | 'created_at' | 'updated_at'>, isDemo: boolean = false): Promise<Transaction> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        const res = await fetch('/api/transactions', {
+          method: 'POST',
+          headers: getLocalHeaders(),
+          body: JSON.stringify(transaction)
+        });
+        if (res.ok) return await res.json();
+      }
       const cat = demoCategories.find(c => c.id === transaction.category_id);
       const newTx: Transaction = {
         ...transaction,
@@ -175,6 +237,15 @@ export const supabaseApi = {
 
   async updateTransaction(id: string, updates: Partial<Transaction>, isDemo: boolean = false): Promise<Transaction> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        const res = await fetch(`/api/transactions/${id}`, {
+          method: 'PUT',
+          headers: getLocalHeaders(),
+          body: JSON.stringify(updates)
+        });
+        if (res.ok) return await res.json();
+      }
       const idx = demoTransactions.findIndex(t => t.id === id);
       if (idx === -1) throw new Error('Transaction not found');
       const cat = updates.category_id ? demoCategories.find(c => c.id === updates.category_id) : demoTransactions[idx].category;
@@ -200,6 +271,14 @@ export const supabaseApi = {
 
   async deleteTransaction(id: string, isDemo: boolean = false): Promise<void> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        await fetch(`/api/transactions/${id}`, {
+          method: 'DELETE',
+          headers: getLocalHeaders()
+        });
+        return;
+      }
       demoTransactions = demoTransactions.filter(t => t.id !== id);
       return;
     }
@@ -213,6 +292,15 @@ export const supabaseApi = {
 
   async bulkDeleteTransactions(ids: string[], isDemo: boolean = false): Promise<void> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        await fetch('/api/transactions/bulk-delete', {
+          method: 'POST',
+          headers: getLocalHeaders(),
+          body: JSON.stringify({ ids })
+        });
+        return;
+      }
       demoTransactions = demoTransactions.filter(t => !ids.includes(t.id));
       return;
     }
@@ -229,6 +317,15 @@ export const supabaseApi = {
   // ---------------------------------------------------------------------------
   async getBudgets(userId?: string, isDemo: boolean = false): Promise<Budget[]> {
     if (!isSupabaseConfigured || isDemo || !userId) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        try {
+          const res = await fetch('/api/budgets', { headers: getLocalHeaders() });
+          if (res.ok) return await res.json();
+        } catch {
+          // Fallback to demo
+        }
+      }
       return demoBudgets;
     }
     const { data, error } = await supabase
@@ -242,6 +339,15 @@ export const supabaseApi = {
 
   async createBudget(budget: Omit<Budget, 'id' | 'created_at' | 'updated_at'>, isDemo: boolean = false): Promise<Budget> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        const res = await fetch('/api/budgets', {
+          method: 'POST',
+          headers: getLocalHeaders(),
+          body: JSON.stringify(budget)
+        });
+        if (res.ok) return await res.json();
+      }
       const cat = demoCategories.find(c => c.id === budget.category_id);
       const newBudget: Budget = {
         ...budget,
@@ -253,7 +359,6 @@ export const supabaseApi = {
       demoBudgets = [newBudget, ...demoBudgets];
       return newBudget;
     }
-
     const { data, error } = await supabase
       .from('budgets')
       .insert(budget)
@@ -266,6 +371,15 @@ export const supabaseApi = {
 
   async updateBudget(id: string, updates: Partial<Budget>, isDemo: boolean = false): Promise<Budget> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        const res = await fetch(`/api/budgets/${id}`, {
+          method: 'PUT',
+          headers: getLocalHeaders(),
+          body: JSON.stringify(updates)
+        });
+        if (res.ok) return await res.json();
+      }
       const idx = demoBudgets.findIndex(b => b.id === id);
       if (idx === -1) throw new Error('Budget not found');
       demoBudgets[idx] = { ...demoBudgets[idx], ...updates, updated_at: new Date().toISOString() };
@@ -284,10 +398,19 @@ export const supabaseApi = {
 
   async deleteBudget(id: string, isDemo: boolean = false): Promise<void> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        await fetch(`/api/budgets/${id}`, { method: 'DELETE', headers: getLocalHeaders() });
+        return;
+      }
       demoBudgets = demoBudgets.filter(b => b.id !== id);
       return;
     }
-    const { error } = await supabase.from('budgets').delete().eq('id', id);
+    const { error } = await supabase
+      .from('budgets')
+      .delete()
+      .eq('id', id);
+
     if (error) throw error;
   },
 
@@ -296,23 +419,41 @@ export const supabaseApi = {
   // ---------------------------------------------------------------------------
   async getSavingsGoals(userId?: string, isDemo: boolean = false): Promise<SavingsGoal[]> {
     if (!isSupabaseConfigured || isDemo || !userId) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        try {
+          const res = await fetch('/api/goals', { headers: getLocalHeaders() });
+          if (res.ok) return await res.json();
+        } catch {
+          // Fallback to demo
+        }
+      }
       return demoGoals;
     }
     const { data, error } = await supabase
       .from('savings_goals')
       .select('*')
       .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .order('target_date');
 
     if (error) throw error;
     return data || [];
   },
 
-  async createGoal(goal: Omit<SavingsGoal, 'id' | 'created_at' | 'updated_at'>, isDemo: boolean = false): Promise<SavingsGoal> {
+  async createSavingsGoal(goal: Omit<SavingsGoal, 'id' | 'created_at' | 'updated_at'>, isDemo: boolean = false): Promise<SavingsGoal> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        const res = await fetch('/api/goals', {
+          method: 'POST',
+          headers: getLocalHeaders(),
+          body: JSON.stringify(goal)
+        });
+        if (res.ok) return await res.json();
+      }
       const newGoal: SavingsGoal = {
         ...goal,
-        id: `g-${Date.now()}`,
+        id: `goal-${Date.now()}`,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -329,8 +470,17 @@ export const supabaseApi = {
     return data;
   },
 
-  async updateGoal(id: string, updates: Partial<SavingsGoal>, isDemo: boolean = false): Promise<SavingsGoal> {
+  async updateSavingsGoal(id: string, updates: Partial<SavingsGoal>, isDemo: boolean = false): Promise<SavingsGoal> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        const res = await fetch(`/api/goals/${id}`, {
+          method: 'PUT',
+          headers: getLocalHeaders(),
+          body: JSON.stringify(updates)
+        });
+        if (res.ok) return await res.json();
+      }
       const idx = demoGoals.findIndex(g => g.id === id);
       if (idx === -1) throw new Error('Goal not found');
       demoGoals[idx] = { ...demoGoals[idx], ...updates, updated_at: new Date().toISOString() };
@@ -347,13 +497,71 @@ export const supabaseApi = {
     return data;
   },
 
-  async deleteGoal(id: string, isDemo: boolean = false): Promise<void> {
+  async contributeToGoal(id: string, amount: number, isDemo: boolean = false): Promise<void> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        await fetch(`/api/goals/${id}/contribute`, {
+          method: 'POST',
+          headers: getLocalHeaders(),
+          body: JSON.stringify({ amount })
+        });
+        return;
+      }
+      const idx = demoGoals.findIndex(g => g.id === id);
+      if (idx !== -1) {
+        const newCurrent = Number(demoGoals[idx].current_amount) + amount;
+        demoGoals[idx].current_amount = newCurrent;
+        if (newCurrent >= demoGoals[idx].target_amount) {
+          demoGoals[idx].status = 'completed';
+        }
+      }
+      return;
+    }
+    const { data: current } = await supabase
+      .from('savings_goals')
+      .select('current_amount, target_amount')
+      .eq('id', id)
+      .single();
+
+    if (current) {
+      const newAmount = Number(current.current_amount) + amount;
+      const status = newAmount >= Number(current.target_amount) ? 'completed' : 'in_progress';
+      await supabase
+        .from('savings_goals')
+        .update({ current_amount: newAmount, status })
+        .eq('id', id);
+    }
+  },
+
+  async deleteSavingsGoal(id: string, isDemo: boolean = false): Promise<void> {
+    if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        await fetch(`/api/goals/${id}`, { method: 'DELETE', headers: getLocalHeaders() });
+        return;
+      }
       demoGoals = demoGoals.filter(g => g.id !== id);
       return;
     }
-    const { error } = await supabase.from('savings_goals').delete().eq('id', id);
+    const { error } = await supabase
+      .from('savings_goals')
+      .delete()
+      .eq('id', id);
+
     if (error) throw error;
+  },
+
+  async createGoal(goal: Omit<SavingsGoal, 'id' | 'created_at' | 'updated_at'>, isDemo: boolean = false): Promise<SavingsGoal> {
+    return this.createSavingsGoal(goal, isDemo);
+  },
+
+  async updateGoal(id: string, updates: Partial<SavingsGoal>, isDemo: boolean = false): Promise<SavingsGoal> {
+    return this.updateSavingsGoal(id, updates, isDemo);
+  },
+
+  async deleteGoal(id: string, isDemo: boolean = false): Promise<void> {
+    return this.deleteSavingsGoal(id, isDemo);
   },
 
   // ---------------------------------------------------------------------------
@@ -361,23 +569,45 @@ export const supabaseApi = {
   // ---------------------------------------------------------------------------
   async getRecurringExpenses(userId?: string, isDemo: boolean = false): Promise<RecurringExpense[]> {
     if (!isSupabaseConfigured || isDemo || !userId) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        try {
+          const res = await fetch('/api/recurring', { headers: getLocalHeaders() });
+          if (res.ok) {
+            const data = await res.json();
+            return data.recurring || [];
+          }
+        } catch {
+          // Fallback to demo
+        }
+      }
       return demoRecurring;
     }
     const { data, error } = await supabase
       .from('recurring_expenses')
       .select('*, category:categories(*)')
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .order('next_due_date');
 
     if (error) throw error;
     return data || [];
   },
 
-  async createRecurring(item: Omit<RecurringExpense, 'id' | 'created_at' | 'updated_at'>, isDemo: boolean = false): Promise<RecurringExpense> {
+  async createRecurringExpense(item: Omit<RecurringExpense, 'id' | 'created_at' | 'updated_at'>, isDemo: boolean = false): Promise<RecurringExpense> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        const res = await fetch('/api/recurring', {
+          method: 'POST',
+          headers: getLocalHeaders(),
+          body: JSON.stringify(item)
+        });
+        if (res.ok) return await res.json();
+      }
       const cat = demoCategories.find(c => c.id === item.category_id);
       const newItem: RecurringExpense = {
         ...item,
-        id: `r-${Date.now()}`,
+        id: `rec-${Date.now()}`,
         category: cat,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -395,23 +625,53 @@ export const supabaseApi = {
     return data;
   },
 
-  async deleteRecurring(id: string, isDemo: boolean = false): Promise<void> {
+  async deleteRecurringExpense(id: string, isDemo: boolean = false): Promise<void> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        await fetch(`/api/recurring/${id}`, { method: 'DELETE', headers: getLocalHeaders() });
+        return;
+      }
       demoRecurring = demoRecurring.filter(r => r.id !== id);
       return;
     }
-    const { error } = await supabase.from('recurring_expenses').delete().eq('id', id);
+    const { error } = await supabase
+      .from('recurring_expenses')
+      .delete()
+      .eq('id', id);
+
     if (error) throw error;
+  },
+
+  async createRecurring(item: Omit<RecurringExpense, 'id' | 'created_at' | 'updated_at'>, isDemo: boolean = false): Promise<RecurringExpense> {
+    return this.createRecurringExpense(item, isDemo);
+  },
+
+  async deleteRecurring(id: string, isDemo: boolean = false): Promise<void> {
+    return this.deleteRecurringExpense(id, isDemo);
   },
 
   async getSubscriptions(userId?: string, isDemo: boolean = false): Promise<Subscription[]> {
     if (!isSupabaseConfigured || isDemo || !userId) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        try {
+          const res = await fetch('/api/recurring', { headers: getLocalHeaders() });
+          if (res.ok) {
+            const data = await res.json();
+            return data.subscriptions || [];
+          }
+        } catch {
+          // Fallback to demo
+        }
+      }
       return demoSubscriptions;
     }
     const { data, error } = await supabase
       .from('subscriptions')
       .select('*, category:categories(*)')
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .order('next_billing_date');
 
     if (error) throw error;
     return data || [];
@@ -419,10 +679,19 @@ export const supabaseApi = {
 
   async createSubscription(sub: Omit<Subscription, 'id' | 'created_at' | 'updated_at'>, isDemo: boolean = false): Promise<Subscription> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        const res = await fetch('/api/recurring', {
+          method: 'POST',
+          headers: getLocalHeaders(),
+          body: JSON.stringify({ ...sub, is_subscription: true })
+        });
+        if (res.ok) return await res.json();
+      }
       const cat = demoCategories.find(c => c.id === sub.category_id);
       const newSub: Subscription = {
         ...sub,
-        id: `s-${Date.now()}`,
+        id: `sub-${Date.now()}`,
         category: cat,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -442,10 +711,19 @@ export const supabaseApi = {
 
   async deleteSubscription(id: string, isDemo: boolean = false): Promise<void> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        await fetch(`/api/recurring/${id}`, { method: 'DELETE', headers: getLocalHeaders() });
+        return;
+      }
       demoSubscriptions = demoSubscriptions.filter(s => s.id !== id);
       return;
     }
-    const { error } = await supabase.from('subscriptions').delete().eq('id', id);
+    const { error } = await supabase
+      .from('subscriptions')
+      .delete()
+      .eq('id', id);
+
     if (error) throw error;
   },
 
@@ -454,6 +732,15 @@ export const supabaseApi = {
   // ---------------------------------------------------------------------------
   async getNotifications(userId?: string, isDemo: boolean = false): Promise<NotificationItem[]> {
     if (!isSupabaseConfigured || isDemo || !userId) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        try {
+          const res = await fetch('/api/notifications', { headers: getLocalHeaders() });
+          if (res.ok) return await res.json();
+        } catch {
+          // Fallback to demo
+        }
+      }
       return demoNotifications;
     }
     const { data, error } = await supabase
@@ -468,6 +755,11 @@ export const supabaseApi = {
 
   async markNotificationRead(id: string, isDemo: boolean = false): Promise<void> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        await fetch(`/api/notifications/${id}/read`, { method: 'POST', headers: getLocalHeaders() });
+        return;
+      }
       demoNotifications = demoNotifications.map(n => n.id === id ? { ...n, read_at: new Date().toISOString() } : n);
       return;
     }
@@ -481,6 +773,11 @@ export const supabaseApi = {
 
   async markAllNotificationsRead(userId?: string, isDemo: boolean = false): Promise<void> {
     if (!isSupabaseConfigured || isDemo || !userId) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        await fetch('/api/notifications/read-all', { method: 'POST', headers: getLocalHeaders() });
+        return;
+      }
       demoNotifications = demoNotifications.map(n => ({ ...n, read_at: new Date().toISOString() }));
       return;
     }
@@ -498,6 +795,15 @@ export const supabaseApi = {
   // ---------------------------------------------------------------------------
   async getSheetConnection(userId?: string, isDemo: boolean = false): Promise<GoogleSheetConnection | null> {
     if (!isSupabaseConfigured || isDemo || !userId) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        try {
+          const res = await fetch('/api/sheets-connection', { headers: getLocalHeaders() });
+          if (res.ok) return await res.json();
+        } catch {
+          // Fallback to demo
+        }
+      }
       return demoSheetConnection;
     }
     const { data, error } = await supabase
@@ -512,6 +818,15 @@ export const supabaseApi = {
 
   async saveSheetConnection(conn: Omit<GoogleSheetConnection, 'id' | 'created_at' | 'updated_at'>, isDemo: boolean = false): Promise<GoogleSheetConnection> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        const res = await fetch('/api/sheets-connection', {
+          method: 'POST',
+          headers: getLocalHeaders(),
+          body: JSON.stringify(conn)
+        });
+        if (res.ok) return await res.json();
+      }
       demoSheetConnection = {
         ...conn,
         id: `sheet-${Date.now()}`,
@@ -532,6 +847,11 @@ export const supabaseApi = {
 
   async disconnectSheet(userId: string, isDemo: boolean = false): Promise<void> {
     if (!isSupabaseConfigured || isDemo) {
+      const token = getLocalToken();
+      if (!isDemo && token) {
+        await fetch('/api/sheets-connection', { method: 'DELETE', headers: getLocalHeaders() });
+        return;
+      }
       demoSheetConnection = null;
       return;
     }

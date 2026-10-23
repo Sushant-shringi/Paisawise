@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/AuthContext';
-import { Lock, CheckCircle2 } from 'lucide-react';
+import { Lock, Mail, KeyRound, CheckCircle2 } from 'lucide-react';
 
 export const ResetPassword: React.FC = () => {
   const { updatePassword } = useAuth();
+  const [searchParams] = useSearchParams();
 
+  const [email, setEmail] = useState(searchParams.get('email') || '');
+  const [otpCode, setOtpCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -14,6 +17,10 @@ export const ResetPassword: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email || !otpCode) {
+      setError('Email and recovery code are required');
+      return;
+    }
     if (password.length < 6) {
       setError('Password must be at least 6 characters long');
       return;
@@ -26,7 +33,7 @@ export const ResetPassword: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const { error } = await updatePassword(password);
+      const { error } = await updatePassword(password, otpCode.trim(), email.trim());
       if (error) {
         setError(error.message);
       } else {
@@ -72,7 +79,7 @@ export const ResetPassword: React.FC = () => {
               Password Changed Successfully
             </h3>
             <p className="text-xs text-slate-300">
-              Your new password is now active.
+              Your new password is now active in the database.
             </p>
             <div className="pt-3">
               <Link to="/login">
@@ -90,7 +97,7 @@ export const ResetPassword: React.FC = () => {
             <div className="text-center mb-4">
               <h3 className="text-lg font-bold text-white">Create New Password</h3>
               <p className="text-xs text-slate-400 mt-1">
-                Enter your new account password below.
+                Enter your account email, 6-digit recovery code, and new password.
               </p>
             </div>
 
@@ -99,6 +106,45 @@ export const ResetPassword: React.FC = () => {
                 {error}
               </div>
             )}
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Account Email
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950/60 border border-white/15 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-colors"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                6-Digit Recovery Code (OTP)
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  maxLength={6}
+                  required
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="••••••"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950/60 border border-white/15 text-sm text-emerald-300 font-mono tracking-widest placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-colors"
+                />
+              </div>
+            </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
@@ -111,11 +157,10 @@ export const ResetPassword: React.FC = () => {
                 <input
                   type="password"
                   required
-                  autoFocus
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Min 6 characters"
-                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-950/60 border border-white/15 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-colors"
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950/60 border border-white/15 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-colors"
                 />
               </div>
             </div>
@@ -133,8 +178,8 @@ export const ResetPassword: React.FC = () => {
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Re-enter password"
-                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-950/60 border border-white/15 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-colors"
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950/60 border border-white/15 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-colors"
                 />
               </div>
             </div>
@@ -144,11 +189,16 @@ export const ResetPassword: React.FC = () => {
               disabled={isLoading}
               className="w-full py-3 px-4 rounded-xl font-extrabold text-sm text-slate-950 bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 hover:from-emerald-300 hover:to-teal-300 shadow-lg shadow-emerald-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2"
             >
-              {isLoading ? 'Updating...' : 'Set New Password'}
+              {isLoading ? 'Updating Password...' : 'Update Password'}
             </button>
+
+            <div className="text-center pt-2">
+              <Link to="/login" className="text-xs text-slate-400 hover:text-white">
+                Cancel and return to Sign In
+              </Link>
+            </div>
           </form>
         )}
-
       </div>
     </div>
   );
