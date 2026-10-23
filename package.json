@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently -k \"npm run server\" \"vite\"",
     "dev:vite": "vite",
-    "server": "tsx server/index.ts",
+    "server": "tsx watch server/index.ts",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run --no-color",

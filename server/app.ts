@@ -12,7 +12,7 @@ import {
   getDevActiveOtp,
   AuthenticatedRequest 
 } from './auth';
-import { sendOtpEmail } from './mailer';
+import { sendOtpEmail, checkSmtpConfigured } from './mailer';
 
 export function createApp(db: DatabaseSync) {
   const app = express();
@@ -27,9 +27,65 @@ export function createApp(db: DatabaseSync) {
   });
 
   // ============================================================================
-  // AUTHENTICATION ROUTES
+  // AUTHENTICATION & EMAIL OTP ROUTES
   // ============================================================================
   const authRouter = express.Router();
+
+  // POST /api/auth/send-otp (Simple real email OTP delivery)
+  authRouter.post('/send-otp', async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { email, purpose = 'email_verification' } = req.body;
+
+      if (!email) {
+        res.status(400).json({ error: 'Email address is required.' });
+        return;
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        res.status(400).json({ error: 'Invalid email address format.' });
+        return;
+      }
+
+      const normalizedEmail = email.trim().toLowerCase();
+
+      // Check if SMTP is configured
+      if (process.env.NODE_ENV !== 'test') {
+        const smtpStatus = checkSmtpConfigured();
+        if (!smtpStatus.configured) {
+          res.status(400).json({
+            error: `SMTP credentials not configured. Missing: ${smtpStatus.missing.join(', ')}. Please set them in your .env file to enable actual email delivery.`
+          });
+          return;
+        }
+      }
+
+      const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(normalizedEmail) as { id: string } | undefined;
+      const userId = existingUser ? existingUser.id : null;
+
+      // Generate secure 6-digit OTP
+      const otpResult = createOtp(db, userId, normalizedEmail, purpose);
+      if (!otpResult.success) {
+        res.status(429).json({ error: otpResult.error });
+        return;
+      }
+
+      // Send actual email via SMTP
+      const emailResult = await sendOtpEmail(normalizedEmail, otpResult.otpCode!, purpose);
+      if (!emailResult.sent) {
+        res.status(500).json({ error: emailResult.error || 'Failed to dispatch email via SMTP.' });
+        return;
+      }
+
+      // Success: never expose the OTP in response
+      res.json({
+        success: true,
+        message: 'OTP sent to your email inbox.'
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Internal server error while sending OTP.' });
+    }
+  });
 
   // POST /api/auth/register
   authRouter.post('/register', async (req: Request, res: Response): Promise<void> => {
@@ -94,20 +150,30 @@ export function createApp(db: DatabaseSync) {
         return;
       }
 
+      // Check SMTP credentials
+      if (process.env.NODE_ENV !== 'test') {
+        const smtpStatus = checkSmtpConfigured();
+        if (!smtpStatus.configured) {
+          res.status(400).json({
+            error: `SMTP credentials not configured. Missing: ${smtpStatus.missing.join(', ')}. Please set them in your .env file to enable actual email delivery.`
+          });
+          return;
+        }
+      }
+
       // Attempt real email dispatch via nodemailer
       const emailRes = await sendOtpEmail(normalizedEmail, otpResult.otpCode!, 'signup_verification');
-      const isDev = process.env.NODE_ENV !== 'production';
+      if (!emailRes.sent && process.env.NODE_ENV !== 'test') {
+        res.status(500).json({ error: emailRes.error || 'Failed to dispatch email via SMTP.' });
+        return;
+      }
 
       res.status(201).json({
         success: true,
-        message: emailRes.sent 
-          ? `Account created! Verification code sent to ${normalizedEmail}.` 
-          : 'Account created! (Verification code generated).',
+        message: `Account created! Verification OTP sent to ${normalizedEmail}.`,
         userId,
         email: normalizedEmail,
-        requiresVerification: true,
-        emailSent: emailRes.sent,
-        devOtp: isDev ? otpResult.otpCode : undefined
+        requiresVerification: true
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Internal server error during registration.' });
@@ -117,15 +183,16 @@ export function createApp(db: DatabaseSync) {
   // POST /api/auth/verify-otp
   authRouter.post('/verify-otp', (req: Request, res: Response): Promise<void> => {
     try {
-      const { email, otpCode, purpose = 'signup_verification' } = req.body;
+      const { email, otp, otpCode, purpose = 'signup_verification' } = req.body;
+      const code = otp || otpCode;
 
-      if (!email || !otpCode) {
-        res.status(400).json({ error: 'Email and OTP code are required.' });
+      if (!email || !code) {
+        res.status(400).json({ error: 'Invalid OTP' });
         return Promise.resolve();
       }
 
       const normalizedEmail = email.trim().toLowerCase();
-      const result = verifyOtp(db, normalizedEmail, otpCode.toString(), purpose);
+      const result = verifyOtp(db, normalizedEmail, code.toString(), purpose);
 
       if (!result.success) {
         res.status(400).json({ error: result.error });
@@ -139,23 +206,23 @@ export function createApp(db: DatabaseSync) {
         email_verified: number;
       };
 
-      const profile = db.prepare('SELECT * FROM profiles WHERE id = ?').get(user.id);
+      const profile = user ? db.prepare('SELECT * FROM profiles WHERE id = ?').get(user.id) : null;
 
-      const token = generateToken({
+      const token = user ? generateToken({
         id: user.id,
         email: user.email,
         full_name: user.full_name
-      });
+      }) : null;
 
       res.json({
         success: true,
-        message: 'Verification successful.',
+        message: 'Email verified successfully',
         token,
-        user: {
+        user: user ? {
           id: user.id,
           email: user.email,
           user_metadata: { full_name: user.full_name }
-        },
+        } : undefined,
         profile
       });
       return Promise.resolve();
@@ -182,6 +249,17 @@ export function createApp(db: DatabaseSync) {
         return;
       }
 
+      // Check SMTP credentials
+      if (process.env.NODE_ENV !== 'test') {
+        const smtpStatus = checkSmtpConfigured();
+        if (!smtpStatus.configured) {
+          res.status(400).json({
+            error: `SMTP credentials not configured. Missing: ${smtpStatus.missing.join(', ')}. Please set them in your .env file to enable actual email delivery.`
+          });
+          return;
+        }
+      }
+
       const otpResult = createOtp(db, user.id, normalizedEmail, purpose);
       if (!otpResult.success) {
         res.status(429).json({ error: otpResult.error });
@@ -189,15 +267,14 @@ export function createApp(db: DatabaseSync) {
       }
 
       const emailRes = await sendOtpEmail(normalizedEmail, otpResult.otpCode!, purpose);
-      const isDev = process.env.NODE_ENV !== 'production';
+      if (!emailRes.sent && process.env.NODE_ENV !== 'test') {
+        res.status(500).json({ error: emailRes.error || 'Failed to dispatch email via SMTP.' });
+        return;
+      }
 
       res.json({ 
         success: true, 
-        message: emailRes.sent 
-          ? `New verification code dispatched to ${normalizedEmail}.` 
-          : 'New verification code generated.',
-        emailSent: emailRes.sent,
-        devOtp: isDev ? otpResult.otpCode : undefined
+        message: `New verification code dispatched to ${normalizedEmail}.`
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to request OTP.' });
@@ -240,14 +317,12 @@ export function createApp(db: DatabaseSync) {
         if (otpResult.success) {
           await sendOtpEmail(normalizedEmail, otpResult.otpCode!, 'signup_verification');
         }
-        const isDev = process.env.NODE_ENV !== 'production';
 
         res.status(403).json({
           error: 'Email verification required.',
           requiresVerification: true,
           email: user.email,
-          userId: user.id,
-          devOtp: isDev && otpResult.success ? otpResult.otpCode : undefined
+          userId: user.id
         });
         return;
       }
@@ -318,16 +393,25 @@ export function createApp(db: DatabaseSync) {
         return;
       }
 
+      // Check SMTP credentials
+      if (process.env.NODE_ENV !== 'test') {
+        const smtpStatus = checkSmtpConfigured();
+        if (!smtpStatus.configured) {
+          res.status(400).json({
+            error: `SMTP credentials not configured. Missing: ${smtpStatus.missing.join(', ')}. Please set them in your .env file to enable actual email delivery.`
+          });
+          return;
+        }
+      }
+
       const otpResult = createOtp(db, user.id, normalizedEmail, 'password_reset');
       if (otpResult.success) {
         await sendOtpEmail(normalizedEmail, otpResult.otpCode!, 'password_reset');
       }
-      const isDev = process.env.NODE_ENV !== 'production';
 
       res.json({ 
         success: true, 
-        message: 'Password recovery code dispatched.',
-        devOtp: isDev && otpResult.success ? otpResult.otpCode : undefined
+        message: 'Password recovery OTP dispatched to your email inbox.'
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to process password recovery.' });

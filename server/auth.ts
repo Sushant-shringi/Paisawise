@@ -70,9 +70,9 @@ export function generateOtpCode(): string {
 
 export function createOtp(
   db: DatabaseSync, 
-  userId: string, 
+  userId: string | null, 
   email: string, 
-  purpose: 'signup_verification' | 'password_reset' = 'signup_verification'
+  purpose: string = 'signup_verification'
 ): { success: boolean; error?: string; otpCode?: string } {
   // Check rate limit: Check recent OTP requests within RATE_LIMIT_SECONDS
   const recentOtp = db.prepare(`
@@ -113,56 +113,69 @@ export function verifyOtp(
   db: DatabaseSync,
   email: string,
   enteredCode: string,
-  purpose: 'signup_verification' | 'password_reset' = 'signup_verification'
-): { success: boolean; error?: string; userId?: string } {
+  purpose: string = 'signup_verification'
+): { success: boolean; message?: string; error?: string; userId?: string } {
+  const normalizedEmail = email.trim().toLowerCase();
+  const trimmedCode = enteredCode.trim();
+
+  // Find the latest OTP for this email and purpose
   const record = db.prepare(`
     SELECT * FROM otps 
-    WHERE email = ? AND purpose = ? AND (verified_at IS NULL OR verified_at = '')
+    WHERE email = ? AND purpose = ?
     ORDER BY created_at DESC LIMIT 1
-  `).get(email, purpose) as {
+  `).get(normalizedEmail, purpose) as {
     id: string;
     user_id: string;
     otp_code: string;
     attempts: number;
     max_attempts: number;
     expires_at: string;
+    verified_at: string | null;
   } | undefined;
 
+  // 1. If no record exists
   if (!record) {
-    return { success: false, error: 'No active OTP found. Please request a new verification code.' };
+    return { success: false, error: 'Invalid OTP' };
   }
 
-  // Check expiration
+  // 2. Requirement 8: A successfully verified OTP must not be reusable
+  if (record.verified_at && record.verified_at !== '') {
+    return { success: false, error: 'Invalid OTP' };
+  }
+
+  // 3. Requirement 7: If the OTP has expired, display "OTP expired. Please request a new one"
   if (Date.now() > new Date(record.expires_at).getTime()) {
-    return { success: false, error: 'OTP has expired. Please request a new verification code.' };
+    return { success: false, error: 'OTP expired. Please request a new one' };
   }
 
   // Check maximum attempts
   if (record.attempts >= record.max_attempts) {
-    return { success: false, error: 'Maximum verification attempts exceeded. Please request a new OTP.' };
+    return { success: false, error: 'Maximum attempts reached. This OTP is now locked. Please request a new OTP.' };
   }
 
-  // Check code match
-  if (record.otp_code !== enteredCode.trim()) {
+  // 4. Requirement 6: If the OTP is incorrect, display "Invalid OTP"
+  if (record.otp_code !== trimmedCode) {
     const updatedAttempts = record.attempts + 1;
     db.prepare('UPDATE otps SET attempts = ? WHERE id = ?').run(updatedAttempts, record.id);
     const remaining = record.max_attempts - updatedAttempts;
     if (remaining <= 0) {
-      return { success: false, error: 'Maximum attempts reached. This OTP is now locked. Please request a new OTP.' };
+      return { success: false, error: 'Invalid OTP. Maximum attempts reached. This OTP is now locked. Please request a new OTP.' };
     }
-    return { success: false, error: `Invalid verification code. ${remaining} attempt${remaining > 1 ? 's' : ''} remaining.` };
+    return { success: false, error: `Invalid OTP. ${remaining} attempt${remaining > 1 ? 's' : ''} remaining.` };
   }
 
-  // Success: mark verified
+  // 5. Requirement 5: If the OTP is correct and not expired, display "Email verified successfully"
   const verifiedAt = new Date().toISOString();
   db.prepare('UPDATE otps SET verified_at = ? WHERE id = ?').run(verifiedAt, record.id);
 
-  // If signup verification, mark user as verified
-  if (purpose === 'signup_verification' && record.user_id) {
+  // Update user verified flag if user exists
+  if (record.user_id) {
     db.prepare('UPDATE users SET email_verified = 1, updated_at = ? WHERE id = ?').run(verifiedAt, record.user_id);
+  } else {
+    db.prepare('UPDATE users SET email_verified = 1, updated_at = ? WHERE email = ?').run(verifiedAt, normalizedEmail);
   }
 
-  return { success: true, userId: record.user_id };
+  return { success: true, message: 'Email verified successfully', userId: record.user_id };
 }
 
 // Development and Automated Testing Adapter:
