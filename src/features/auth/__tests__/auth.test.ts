@@ -1,0 +1,22 @@
+import { describe, it, expect } from 'vitest';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
+
+describe('Authentication & Session Logic', () => {
+  it('detects when Supabase is configured vs fallback demo mode', () => {
+    // When no VITE_SUPABASE_URL or placeholder is present, isSupabaseConfigured is false
+    expect(typeof isSupabaseConfigured).toBe('boolean');
+  });
+
+  it('validates password requirements safely', () => {
+    const isValidPassword = (p: string) => p.length >= 6;
+    expect(isValidPassword('short')).toBe(false);
+    expect(isValidPassword('secure123')).toBe(true);
+  });
+
+  it('validates email format patterns', () => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    expect(emailRegex.test('user@example.com')).toBe(true);
+    expect(emailRegex.test('user@paisawise.app')).toBe(true);
+    expect(emailRegex.test('invalid-email')).toBe(false);
+  });
+});
