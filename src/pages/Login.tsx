@@ -1,27 +1,44 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/features/auth/AuthContext';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Sparkles, ShieldCheck, ArrowRight, Lock, Mail } from 'lucide-react';
+import { 
+  User, 
+  Mail, 
+  Lock, 
+  ArrowRight, 
+  Sparkles, 
+  Check, 
+  ShieldCheck 
+} from 'lucide-react';
+import clsx from 'clsx';
 
-export const Login: React.FC = () => {
-  const { signIn, toggleDemoMode } = useAuth();
+export const Login: React.FC<{ initialMode?: 'signin' | 'signup' }> = ({ initialMode }) => {
+  const { signIn, signUp, toggleDemoMode } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
+  // Tab state: 'signin' or 'signup'
+  const [activeTab, setActiveTab] = useState<'signin' | 'signup'>(() => {
+    if (initialMode) return initialMode;
+    return location.pathname === '/register' ? 'signup' : 'signin';
+  });
+
+  // Form states
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [agreeTerms, setAgreeTerms] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [resetSent, setResetSent] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Sign In handler
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      setError('Please fill in both email and password');
+      setError('Please enter both email and password');
       return;
     }
-
     setIsLoading(true);
     setError(null);
     try {
@@ -38,113 +55,319 @@ export const Login: React.FC = () => {
     }
   };
 
-  const handleDemoLogin = () => {
+  // Sign Up handler
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fullName || !email || !password) {
+      setError('Please fill in all fields');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+    if (!agreeTerms) {
+      setError('You must agree to the Terms of Service');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { error } = await signUp(email, password, fullName);
+      if (error) {
+        setError(error.message);
+      } else {
+        navigate('/');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Account creation failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Google OAuth click
+  const handleGoogleSignIn = () => {
+    // If Supabase Google OAuth is configured, it redirects; otherwise enters demo workspace
     toggleDemoMode(true);
     navigate('/');
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 mx-auto flex items-center justify-center text-white font-extrabold text-2xl shadow-lg shadow-emerald-500/20">
-          ₹
+    <div className="min-h-screen relative flex items-center justify-center p-4 sm:p-6 overflow-hidden bg-slate-950">
+      {/* Cinematic Ambient Background (Bokeh office lighting matching user mockup) */}
+      <div 
+        className="absolute inset-0 bg-cover bg-center opacity-30 scale-105 filter blur-sm"
+        style={{
+          backgroundImage: `radial-gradient(circle at 20% 30%, rgba(16, 185, 129, 0.25) 0%, transparent 50%),
+                            radial-gradient(circle at 80% 40%, rgba(245, 158, 11, 0.2) 0%, transparent 55%),
+                            radial-gradient(circle at 50% 80%, rgba(6, 182, 212, 0.15) 0%, transparent 50%),
+                            linear-gradient(to bottom, #090d16, #0f172a)`
+        }}
+      />
+      
+      {/* Decorative ambient blurred orbs */}
+      <div className="absolute top-1/4 left-10 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-10 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Main Glassmorphism Frosted Card */}
+      <div className="relative z-10 w-full max-w-md sm:max-w-lg rounded-3xl p-6 sm:p-8 backdrop-blur-2xl bg-slate-900/60 border border-white/15 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8)] text-white">
+        
+        {/* Top Segmented Tab Switch: [ Sign In ]  [ Create Account ] */}
+        <div className="flex p-1.5 rounded-2xl bg-slate-950/70 border border-white/10 mb-6 shadow-inner">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('signin');
+              setError(null);
+            }}
+            className={clsx(
+              'flex-1 py-2.5 text-xs sm:text-sm font-extrabold rounded-xl transition-all duration-200',
+              activeTab === 'signin'
+                ? 'bg-slate-800/90 text-white shadow-md border border-white/10'
+                : 'text-slate-400 hover:text-slate-200'
+            )}
+          >
+            Sign In
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('signup');
+              setError(null);
+            }}
+            className={clsx(
+              'flex-1 py-2.5 text-xs sm:text-sm font-extrabold rounded-xl transition-all duration-200',
+              activeTab === 'signup'
+                ? 'bg-slate-800/90 text-white shadow-md border border-white/10'
+                : 'text-slate-400 hover:text-slate-200'
+            )}
+          >
+            Create Account
+          </button>
         </div>
-        <h2 className="mt-4 text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-          Sign in to Paisa<span className="text-emerald-600 dark:text-emerald-400">Wise</span>
-        </h2>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          Track Your Money. Understand Your Habits. Build a Better Financial Future.
-        </p>
-      </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
-        <div className="bg-white dark:bg-slate-900 py-8 px-6 sm:px-10 shadow-xl rounded-2xl border border-slate-200 dark:border-slate-800 space-y-6">
-          {/* Quick Demo Mode Pill Button for Evaluators */}
-          <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-center">
-            <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 block mb-1">
-              Reviewer / Portfolio Fast Track
-            </span>
-            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mb-2.5">
-              Explore the entire live application with pre-seeded Indian financial records without signing up.
-            </p>
-            <Button
-              type="button"
-              onClick={handleDemoLogin}
-              variant="primary"
-              size="sm"
-              className="w-full"
-              leftIcon={<Sparkles className="w-4 h-4" />}
-            >
-              Launch Instant Demo Workspace
-            </Button>
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-200 text-xs font-semibold">
+            {error}
           </div>
+        )}
 
-          <div className="relative flex items-center justify-center">
-            <div className="border-t border-slate-200 dark:border-slate-800 w-full" />
-            <span className="bg-white dark:bg-slate-900 px-3 text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
-              Or sign in with Supabase
-            </span>
-          </div>
-
-          {error && (
-            <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 font-semibold">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Input
-              label="Email Address"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              leftIcon={<Mail className="w-4 h-4" />}
-            />
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  Password
-                </label>
-                <Link
-                  to="/forgot-password"
-                  className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
-                >
-                  Forgot password?
-                </Link>
+        {/* ------------------------------------------------------------------ */}
+        {/* VIEW 1: SIGN IN (Matches Left Card in User Reference Image)         */}
+        {/* ------------------------------------------------------------------ */}
+        {activeTab === 'signin' && (
+          <form onSubmit={handleSignIn} className="space-y-5">
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              {/* Mascot / Savings Illustration */}
+              <div className="hidden sm:flex flex-col items-center justify-center shrink-0 w-32 h-32 relative">
+                <svg viewBox="0 0 160 160" className="w-full h-full drop-shadow-md">
+                  <circle cx="80" cy="80" r="62" fill="#10b981" fillOpacity="0.12" />
+                  {/* Body & Clothes */}
+                  <path d="M50 145 C50 115, 62 105, 78 102 C82 101, 88 101, 92 102 C108 105, 120 115, 120 145 Z" fill="#ffffff" fillOpacity="0.95" />
+                  <path d="M50 145 C50 115, 62 105, 78 102" stroke="#0f172a" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                  <path d="M120 145 C120 115, 108 105, 92 102" stroke="#0f172a" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                  
+                  {/* Head */}
+                  <path d="M80 88 L80 102" stroke="#0f172a" strokeWidth="2.5" strokeLinecap="round" />
+                  <circle cx="80" cy="68" r="17" fill="#ffffff" stroke="#0f172a" strokeWidth="2.5" />
+                  {/* Hair */}
+                  <path d="M66 66 C66 52, 72 48, 80 48 C88 48, 94 52, 94 66 C92 57, 84 55, 80 55 C74 55, 68 59, 66 66 Z" fill="#0f172a" />
+                  
+                  {/* Money Pouch */}
+                  <path d="M85 110 C72 110, 64 118, 64 130 C64 140, 73 146, 86 146 C99 146, 108 140, 108 130 C108 118, 98 110, 85 110 Z" fill="#10b981" />
+                  <path d="M81 108 L89 108" stroke="#047857" strokeWidth="3" strokeLinecap="round" />
+                  {/* Rupee Symbol on Pouch */}
+                  <text x="86" y="136" fontSize="17" fontWeight="bold" fill="#ffffff" textAnchor="middle" fontFamily="system-ui">₹</text>
+                  
+                  {/* Floating Coins & Sparkles */}
+                  <circle cx="106" cy="114" r="3.5" fill="#34d399" />
+                  <circle cx="114" cy="104" r="2.8" fill="#6ee7b7" />
+                  <circle cx="110" cy="94" r="2" fill="#a7f3d0" />
+                </svg>
               </div>
-              <Input
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                leftIcon={<Lock className="w-4 h-4" />}
-              />
+
+              {/* Input Fields */}
+              <div className="flex-1 w-full space-y-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@example.com"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950/60 border border-white/15 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950/60 border border-white/15 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-colors"
+                  />
+                  <div className="text-right mt-1.5">
+                    <Link
+                      to="/forgot-password"
+                      className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 underline"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <Button
+            {/* Glowing Emerald Sign In Button */}
+            <button
               type="submit"
-              variant="primary"
-              className="w-full mt-2"
-              isLoading={isLoading}
-              rightIcon={<ArrowRight className="w-4 h-4" />}
+              disabled={isLoading}
+              className="w-full py-3 px-4 rounded-xl font-extrabold text-sm text-slate-950 bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 hover:from-emerald-300 hover:to-teal-300 shadow-lg shadow-emerald-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
             >
-              Sign In
-            </Button>
-          </form>
+              {isLoading ? 'Signing In...' : 'Sign In'}
+            </button>
 
-          <div className="text-center text-xs text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800">
-            Don't have an account yet?{' '}
-            <Link to="/register" className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
-              Create an account
-            </Link>
-          </div>
-        </div>
+            {/* "or" Divider */}
+            <div className="relative flex items-center justify-center py-1">
+              <div className="border-t border-white/10 w-full" />
+              <span className="bg-slate-900/80 px-3 text-[11px] text-slate-400 uppercase font-semibold">
+                or
+              </span>
+            </div>
+
+            {/* Google Sign-In Button */}
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2.5 border border-slate-200"
+            >
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z" />
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z" />
+                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z" />
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z" />
+              </svg>
+              <span>Google Sign-In</span>
+            </button>
+
+            {/* Fast Demo Mode Link for Reviewers */}
+            <div className="text-center pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  toggleDemoMode(true);
+                  navigate('/');
+                }}
+                className="text-[11px] text-slate-400 hover:text-emerald-300 flex items-center justify-center gap-1.5 mx-auto"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Explore with pre-seeded demo records</span>
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* ------------------------------------------------------------------ */}
+        {/* VIEW 2: CREATE ACCOUNT (Matches Right Card in User Reference Image) */}
+        {/* ------------------------------------------------------------------ */}
+        {activeTab === 'signup' && (
+          <form onSubmit={handleSignUp} className="space-y-4">
+            {/* Logo Brand Header */}
+            <div className="flex items-center justify-center gap-2.5 pb-2">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-400 to-teal-300 flex items-center justify-center text-slate-950 font-black text-lg shadow-md shadow-emerald-500/20">
+                P
+              </div>
+              <span className="font-extrabold text-xl tracking-tight text-white">
+                Paisa<span className="text-emerald-400">Wise</span>
+              </span>
+            </div>
+
+            {/* Legal Name Field with User icon */}
+            <div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <User className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Legal Name"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-950/60 border border-white/15 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* Email Field with Mail icon */}
+            <div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email Address"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-950/60 border border-white/15 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* Password Field with Lock icon */}
+            <div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-950/60 border border-white/15 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* Glowing Emerald Create Account Button */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3 px-4 rounded-xl font-extrabold text-sm text-slate-950 bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 hover:from-emerald-300 hover:to-teal-300 shadow-lg shadow-emerald-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2"
+            >
+              {isLoading ? 'Creating Account...' : 'Create Account'}
+            </button>
+
+            {/* Terms of Service Checkbox */}
+            <div className="flex items-center justify-center gap-2 pt-2 text-xs text-slate-400">
+              <input
+                type="checkbox"
+                id="tos"
+                checked={agreeTerms}
+                onChange={(e) => setAgreeTerms(e.target.checked)}
+                className="w-3.5 h-3.5 rounded border-white/20 bg-slate-950/60 text-emerald-500 focus:ring-emerald-400"
+              />
+              <label htmlFor="tos" className="cursor-pointer hover:text-slate-300">
+                Terms of Service and Privacy Policy
+              </label>
+            </div>
+          </form>
+        )}
+
       </div>
     </div>
   );
