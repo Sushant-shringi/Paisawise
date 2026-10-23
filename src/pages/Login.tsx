@@ -247,17 +247,6 @@ export const Login: React.FC<{ initialMode?: 'signin' | 'signup' }> = ({ initial
                   <span>Back to Login</span>
                 </button>
               </div>
-
-              {/* Dev helper button for local environment */}
-              <div className="pt-2 border-t border-white/10 text-center">
-                <button
-                  type="button"
-                  onClick={handleFetchDevOtp}
-                  className="text-[11px] font-bold text-amber-400 hover:text-amber-300 underline"
-                >
-                  [Local Dev Test] Autofill Active OTP
-                </button>
-              </div>
             </form>
           </div>
         ) : (

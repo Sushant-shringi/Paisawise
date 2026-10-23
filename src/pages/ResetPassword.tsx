@@ -127,17 +127,10 @@ export const ResetPassword: React.FC = () => {
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
+              <div className="mb-1">
                 <label className="block text-xs font-semibold text-slate-300">
                   6-Digit Recovery Code (OTP)
                 </label>
-                <button
-                  type="button"
-                  onClick={handleFetchDevResetOtp}
-                  className="text-[11px] font-bold text-amber-400 hover:text-amber-300 underline"
-                >
-                  [Autofill Active Code]
-                </button>
               </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
