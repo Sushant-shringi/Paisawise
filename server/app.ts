@@ -12,7 +12,7 @@ import {
   getDevActiveOtp,
   AuthenticatedRequest 
 } from './auth';
-import { sendOtpEmail, checkSmtpConfigured } from './mailer';
+import { sendOtpEmail, checkEmailConfigured } from './mailer';
 
 export function createApp(db: DatabaseSync) {
   const app = express();
@@ -49,12 +49,13 @@ export function createApp(db: DatabaseSync) {
 
       const normalizedEmail = email.trim().toLowerCase();
 
-      // Check if SMTP is configured
+      // Check if email service is configured on server
       if (process.env.NODE_ENV !== 'test') {
-        const smtpStatus = checkSmtpConfigured();
-        if (!smtpStatus.configured) {
-          res.status(400).json({
-            error: `SMTP credentials not configured. Missing: ${smtpStatus.missing.join(', ')}. Please set them in your .env file to enable actual email delivery.`
+        const emailStatus = checkEmailConfigured();
+        if (!emailStatus.configured) {
+          console.warn(`[PaisaWise Server Log - Admin Setup Required] Cannot dispatch OTP: ${emailStatus.details}`);
+          res.status(503).json({
+            error: 'Email delivery service is currently unavailable. Please contact the administrator or try again later.'
           });
           return;
         }
@@ -70,10 +71,10 @@ export function createApp(db: DatabaseSync) {
         return;
       }
 
-      // Send actual email via SMTP
+      // Send actual email via configured provider
       const emailResult = await sendOtpEmail(normalizedEmail, otpResult.otpCode!, purpose);
       if (!emailResult.sent) {
-        res.status(500).json({ error: emailResult.error || 'Failed to dispatch email via SMTP.' });
+        res.status(503).json({ error: emailResult.userMessage || 'Failed to dispatch email.' });
         return;
       }
 
@@ -150,21 +151,22 @@ export function createApp(db: DatabaseSync) {
         return;
       }
 
-      // Check SMTP credentials
+      // Check server email configuration
       if (process.env.NODE_ENV !== 'test') {
-        const smtpStatus = checkSmtpConfigured();
-        if (!smtpStatus.configured) {
-          res.status(400).json({
-            error: `SMTP credentials not configured. Missing: ${smtpStatus.missing.join(', ')}. Please set them in your .env file to enable actual email delivery.`
+        const emailStatus = checkEmailConfigured();
+        if (!emailStatus.configured) {
+          console.warn(`[PaisaWise Server Log - Admin Setup Required] Cannot dispatch signup OTP: ${emailStatus.details}`);
+          res.status(503).json({
+            error: 'Email delivery service is currently unavailable. Please contact the administrator or try again later.'
           });
           return;
         }
       }
 
-      // Attempt real email dispatch via nodemailer
+      // Attempt real email dispatch via configured provider
       const emailRes = await sendOtpEmail(normalizedEmail, otpResult.otpCode!, 'signup_verification');
       if (!emailRes.sent && process.env.NODE_ENV !== 'test') {
-        res.status(500).json({ error: emailRes.error || 'Failed to dispatch email via SMTP.' });
+        res.status(503).json({ error: emailRes.userMessage || 'Failed to dispatch email.' });
         return;
       }
 
@@ -249,12 +251,13 @@ export function createApp(db: DatabaseSync) {
         return;
       }
 
-      // Check SMTP credentials
+      // Check server email configuration
       if (process.env.NODE_ENV !== 'test') {
-        const smtpStatus = checkSmtpConfigured();
-        if (!smtpStatus.configured) {
-          res.status(400).json({
-            error: `SMTP credentials not configured. Missing: ${smtpStatus.missing.join(', ')}. Please set them in your .env file to enable actual email delivery.`
+        const emailStatus = checkEmailConfigured();
+        if (!emailStatus.configured) {
+          console.warn(`[PaisaWise Server Log - Admin Setup Required] Cannot resend OTP: ${emailStatus.details}`);
+          res.status(503).json({
+            error: 'Email delivery service is currently unavailable. Please contact the administrator or try again later.'
           });
           return;
         }
@@ -268,7 +271,7 @@ export function createApp(db: DatabaseSync) {
 
       const emailRes = await sendOtpEmail(normalizedEmail, otpResult.otpCode!, purpose);
       if (!emailRes.sent && process.env.NODE_ENV !== 'test') {
-        res.status(500).json({ error: emailRes.error || 'Failed to dispatch email via SMTP.' });
+        res.status(503).json({ error: emailRes.userMessage || 'Failed to dispatch email.' });
         return;
       }
 
@@ -393,12 +396,13 @@ export function createApp(db: DatabaseSync) {
         return;
       }
 
-      // Check SMTP credentials
+      // Check server email configuration
       if (process.env.NODE_ENV !== 'test') {
-        const smtpStatus = checkSmtpConfigured();
-        if (!smtpStatus.configured) {
-          res.status(400).json({
-            error: `SMTP credentials not configured. Missing: ${smtpStatus.missing.join(', ')}. Please set them in your .env file to enable actual email delivery.`
+        const emailStatus = checkEmailConfigured();
+        if (!emailStatus.configured) {
+          console.warn(`[PaisaWise Server Log - Admin Setup Required] Cannot send forgot-password OTP: ${emailStatus.details}`);
+          res.status(503).json({
+            error: 'Email delivery service is currently unavailable. Please contact the administrator or try again later.'
           });
           return;
         }

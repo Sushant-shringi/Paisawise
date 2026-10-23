@@ -14,10 +14,6 @@ export const ResetPassword: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [devNotice, setDevNotice] = useState<string | null>(() => {
-    const passedOtp = searchParams.get('otp');
-    return passedOtp ? `Autofilled recovery code: ${passedOtp}` : null;
-  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,30 +43,6 @@ export const ResetPassword: React.FC = () => {
       setError(err.message || 'Failed to update password');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleFetchDevResetOtp = async () => {
-    if (!email) {
-      setError('Please enter your account email first');
-      return;
-    }
-    try {
-      const res = await fetch(`/api/auth/dev-active-otp?email=${encodeURIComponent(email)}&purpose=password_reset`, {
-        headers: { 'x-dev-test-token': 'paisawise-internal-test-key' }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.otp) {
-          setOtpCode(data.otp);
-          setDevNotice(`Autofilled active recovery code: ${data.otp}`);
-          setError(null);
-        } else {
-          setError('No active recovery code found for this email. Generate one on the Forgot Password page.');
-        }
-      }
-    } catch {
-      setError('Could not retrieve local recovery code.');
     }
   };
 
@@ -128,12 +100,6 @@ export const ResetPassword: React.FC = () => {
                 Enter your account email, 6-digit recovery code, and new password.
               </p>
             </div>
-
-            {devNotice && (
-              <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 text-xs font-semibold text-center">
-                {devNotice}
-              </div>
-            )}
 
             {error && (
               <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-200 text-xs font-semibold">

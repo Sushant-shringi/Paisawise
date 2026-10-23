@@ -25,9 +25,6 @@ export const ForgotPassword: React.FC = () => {
       if (res.error) {
         setError(res.error.message);
       } else {
-        if (res.devOtp) {
-          setRecoveryCode(res.devOtp);
-        }
         setIsSubmitted(true);
       }
     } catch (err: any) {
@@ -72,33 +69,14 @@ export const ForgotPassword: React.FC = () => {
               <CheckCircle2 className="w-6 h-6" />
             </div>
             <h3 className="text-base font-bold text-white">
-              Password Recovery Code Generated
+              Recovery Code Sent
             </h3>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Recovery instructions for <strong className="text-emerald-400">{email}</strong>.
+              We have sent a 6-digit recovery code to <strong className="text-emerald-400">{email}</strong>. Please check your inbox.
             </p>
 
-            {recoveryCode && (
-              <div className="p-3.5 rounded-2xl bg-emerald-950/70 border border-emerald-400/40 shadow-lg shadow-emerald-500/10 text-center">
-                <div className="flex items-center justify-center gap-2 mb-1">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-xs font-bold text-emerald-300">Your Recovery Code:</span>
-                </div>
-                <div className="text-3xl font-black tracking-[0.25em] text-emerald-400 font-mono py-1">
-                  {recoveryCode}
-                </div>
-                <p className="text-[11px] text-slate-300 mt-1">
-                  Click the button below to reset your password with this code.
-                </p>
-              </div>
-            )}
-
-            <div className="p-2.5 rounded-xl bg-slate-950/50 border border-white/10 text-center text-[11px] text-slate-400 leading-relaxed">
-              <span>Checking manual inbox? Real email dispatch requires SMTP in <code>.env</code>. Without it, your code is displayed above!</span>
-            </div>
-
             <div className="pt-2 space-y-2.5">
-              <Link to={`/reset-password?email=${encodeURIComponent(email)}${recoveryCode ? `&otp=${recoveryCode}` : ''}`}>
+              <Link to={`/reset-password?email=${encodeURIComponent(email)}`}>
                 <button
                   type="button"
                   className="w-full py-3 px-4 rounded-xl font-extrabold text-sm text-slate-950 bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 hover:from-emerald-300 hover:to-teal-300 shadow-lg shadow-emerald-500/25 active:scale-[0.98] transition-all"

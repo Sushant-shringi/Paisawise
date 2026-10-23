@@ -5,8 +5,10 @@ import path from 'node:path';
 
 export interface EmailResult {
   sent: boolean;
+  provider?: 'resend' | 'smtp' | 'test';
   messageId?: string;
   error?: string;
+  userMessage?: string;
 }
 
 export function isTestEnv(): boolean {
@@ -20,26 +22,38 @@ export function loadEnvFile(): void {
   }
 }
 
-export function checkSmtpConfigured(): { configured: boolean; missing: string[] } {
+export interface EmailProviderStatus {
+  configured: boolean;
+  provider: 'resend' | 'smtp' | 'none';
+  details: string;
+}
+
+/**
+ * Checks server email configuration.
+ * Only the application owner sets these on the server.
+ * Normal users never see or configure these.
+ */
+export function checkEmailConfigured(): EmailProviderStatus {
   if (isTestEnv()) {
-    return { configured: true, missing: [] };
+    return { configured: true, provider: 'smtp', details: 'Test environment active' };
   }
   loadEnvFile();
-  const missing: string[] = [];
 
-  const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASS?.trim();
-
-  if (!user) {
-    missing.push('SMTP_USER');
-  }
-  if (!pass) {
-    missing.push('SMTP_PASS');
+  const resendKey = process.env.RESEND_API_KEY?.trim();
+  if (resendKey) {
+    return { configured: true, provider: 'resend', details: 'Resend API Key configured' };
   }
 
-  return {
-    configured: missing.length === 0,
-    missing
+  const smtpUser = process.env.SMTP_USER?.trim();
+  const smtpPass = process.env.SMTP_PASS?.trim();
+  if (smtpUser && smtpPass) {
+    return { configured: true, provider: 'smtp', details: `SMTP configured for ${smtpUser}` };
+  }
+
+  return { 
+    configured: false, 
+    provider: 'none', 
+    details: 'Neither RESEND_API_KEY nor (SMTP_USER and SMTP_PASS) are set in server .env' 
   };
 }
 
@@ -75,47 +89,49 @@ export function getTransporter(): nodemailer.Transporter | null {
 }
 
 export function initializeMailer(): void {
-  const status = checkSmtpConfigured();
+  const status = checkEmailConfigured();
   if (status.configured) {
-    const user = process.env.SMTP_USER;
-    console.log(`[PaisaWise Mailer] SMTP configured for ${user}. Verifying connection...`);
-    const transporter = getTransporter();
-    if (transporter) {
-      transporter.verify((err) => {
-        if (err) {
-          console.warn(`[PaisaWise Mailer] SMTP verification warning: ${err.message}`);
-        } else {
-          console.log(`[PaisaWise Mailer] SMTP connection verified successfully! Ready to deliver real emails to actual inboxes.`);
-        }
-      });
+    if (status.provider === 'resend') {
+      console.log('[PaisaWise Mailer] Real email delivery enabled via Resend API.');
+    } else if (status.provider === 'smtp') {
+      console.log(`[PaisaWise Mailer] Real email delivery enabled via SMTP (${process.env.SMTP_USER}). Verifying connection...`);
+      const transporter = getTransporter();
+      if (transporter) {
+        transporter.verify((err) => {
+          if (err) {
+            console.warn(`[PaisaWise Mailer] SMTP verification warning: ${err.message}`);
+          } else {
+            console.log(`[PaisaWise Mailer] SMTP connection verified successfully! Ready to deliver real emails to actual inboxes.`);
+          }
+        });
+      }
     }
   } else {
-    console.log(`[PaisaWise Mailer] SMTP credentials missing in .env: ${status.missing.join(', ')}.`);
+    console.log(`[PaisaWise Mailer Server Notice] No email provider configured in server .env. (Owner setup: set RESEND_API_KEY or SMTP_PASS to deliver real emails).`);
   }
 }
 
+/**
+ * Send OTP to user's real email inbox.
+ * Normal users only provide their email.
+ * Server dispatches using whichever provider the owner configured.
+ */
 export async function sendOtpEmail(
   toEmail: string,
   otpCode: string,
   purpose: string = 'email_verification'
 ): Promise<EmailResult> {
   if (isTestEnv()) {
-    return { sent: true, messageId: 'vitest-test-id' };
+    return { sent: true, provider: 'test', messageId: 'vitest-test-id' };
   }
 
-  const status = checkSmtpConfigured();
+  const status = checkEmailConfigured();
   if (!status.configured) {
+    console.warn(`[PaisaWise Server Admin Warning] Email not dispatched to ${toEmail}: No server email credentials found in .env.`);
     return {
       sent: false,
-      error: `SMTP credentials not configured. Missing: ${status.missing.join(', ')}. Please configure them in .env to deliver actual emails.`
-    };
-  }
-
-  const transporter = getTransporter();
-  if (!transporter) {
-    return {
-      sent: false,
-      error: 'Unable to initialize email transporter. Please check SMTP settings in .env.'
+      userMessage: 'Email delivery service is currently not available. Please contact support or try again later.',
+      error: 'No email service configured on server.'
     };
   }
 
@@ -167,6 +183,60 @@ export async function sendOtpEmail(
     </body>
     </html>
   `;
+  const textContent = `Your PaisaWise verification code is: ${otpCode}. It is valid for 10 minutes and can only be used once.`;
+
+  // Path 1: Resend HTTP API (Simplest transactional provider)
+  if (status.provider === 'resend') {
+    const resendApiKey = process.env.RESEND_API_KEY!.trim();
+    const fromAddress = process.env.RESEND_FROM || 'PaisaWise Security <onboarding@resend.dev>';
+
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: fromAddress,
+          to: [toEmail],
+          subject,
+          html: htmlContent,
+          text: textContent
+        })
+      });
+
+      const data = await response.json() as any;
+      if (!response.ok) {
+        console.error(`[PaisaWise Mailer] Resend API error:`, data);
+        return {
+          sent: false,
+          userMessage: 'Unable to deliver verification email at this moment. Please try again shortly.',
+          error: data.message || 'Resend delivery failed'
+        };
+      }
+
+      console.log(`[PaisaWise Mailer] Real email delivered via Resend to ${toEmail} (ID: ${data.id})`);
+      return { sent: true, provider: 'resend', messageId: data.id };
+    } catch (err: any) {
+      console.error(`[PaisaWise Mailer] Resend request exception:`, err.message);
+      return {
+        sent: false,
+        userMessage: 'Unable to deliver verification email at this moment. Please try again shortly.',
+        error: err.message
+      };
+    }
+  }
+
+  // Path 2: SMTP / Gmail Nodemailer
+  const transporter = getTransporter();
+  if (!transporter) {
+    return {
+      sent: false,
+      userMessage: 'Email delivery service is currently not available. Please contact support.',
+      error: 'Unable to initialize email transporter.'
+    };
+  }
 
   try {
     const fromEmail = process.env.SMTP_USER;
@@ -177,15 +247,16 @@ export async function sendOtpEmail(
       to: toEmail,
       subject,
       html: htmlContent,
-      text: `Your PaisaWise verification code is: ${otpCode}. It is valid for 10 minutes and can only be used once.`
+      text: textContent
     });
 
-    console.log(`[PaisaWise Mailer] Real email delivered to ${toEmail} (Message ID: ${info.messageId})`);
-    return { sent: true, messageId: info.messageId };
+    console.log(`[PaisaWise Mailer] Real email delivered via SMTP to ${toEmail} (Message ID: ${info.messageId})`);
+    return { sent: true, provider: 'smtp', messageId: info.messageId };
   } catch (err: any) {
     console.error(`[PaisaWise Mailer] Failed to deliver email via SMTP:`, err.message);
     return { 
       sent: false, 
+      userMessage: 'Failed to deliver verification email. Please try again shortly.',
       error: `SMTP delivery failed: ${err.message}` 
     };
   }

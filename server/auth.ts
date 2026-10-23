@@ -153,7 +153,7 @@ export function verifyOtp(
     return { success: false, error: 'Maximum attempts reached. This OTP is now locked. Please request a new OTP.' };
   }
 
-  // 4. Requirement 6: If the OTP is incorrect, display "Invalid OTP"
+  // 4. Requirement 9: If the OTP is incorrect, return "Invalid OTP" with attempt tracking
   if (record.otp_code !== trimmedCode) {
     const updatedAttempts = record.attempts + 1;
     db.prepare('UPDATE otps SET attempts = ? WHERE id = ?').run(updatedAttempts, record.id);
