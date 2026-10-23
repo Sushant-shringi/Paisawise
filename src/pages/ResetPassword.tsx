@@ -8,12 +8,16 @@ export const ResetPassword: React.FC = () => {
   const [searchParams] = useSearchParams();
 
   const [email, setEmail] = useState(searchParams.get('email') || '');
-  const [otpCode, setOtpCode] = useState('');
+  const [otpCode, setOtpCode] = useState(searchParams.get('otp') || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [devNotice, setDevNotice] = useState<string | null>(() => {
+    const passedOtp = searchParams.get('otp');
+    return passedOtp ? `Autofilled recovery code: ${passedOtp}` : null;
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,6 +47,30 @@ export const ResetPassword: React.FC = () => {
       setError(err.message || 'Failed to update password');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleFetchDevResetOtp = async () => {
+    if (!email) {
+      setError('Please enter your account email first');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/auth/dev-active-otp?email=${encodeURIComponent(email)}&purpose=password_reset`, {
+        headers: { 'x-dev-test-token': 'paisawise-internal-test-key' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.otp) {
+          setOtpCode(data.otp);
+          setDevNotice(`Autofilled active recovery code: ${data.otp}`);
+          setError(null);
+        } else {
+          setError('No active recovery code found for this email. Generate one on the Forgot Password page.');
+        }
+      }
+    } catch {
+      setError('Could not retrieve local recovery code.');
     }
   };
 
@@ -101,6 +129,12 @@ export const ResetPassword: React.FC = () => {
               </p>
             </div>
 
+            {devNotice && (
+              <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 text-xs font-semibold text-center">
+                {devNotice}
+              </div>
+            )}
+
             {error && (
               <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-200 text-xs font-semibold">
                 {error}
@@ -127,9 +161,18 @@ export const ResetPassword: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                6-Digit Recovery Code (OTP)
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-300">
+                  6-Digit Recovery Code (OTP)
+                </label>
+                <button
+                  type="button"
+                  onClick={handleFetchDevResetOtp}
+                  className="text-[11px] font-bold text-amber-400 hover:text-amber-300 underline"
+                >
+                  [Autofill Active Code]
+                </button>
+              </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                   <KeyRound className="w-4 h-4" />

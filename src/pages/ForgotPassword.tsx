@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/features/auth/AuthContext';
-import { Mail, ArrowLeft, CheckCircle2, KeyRound } from 'lucide-react';
+import { Mail, CheckCircle2 } from 'lucide-react';
 
 export const ForgotPassword: React.FC = () => {
   const { resetPassword } = useAuth();
   const [email, setEmail] = useState('');
+  const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -20,10 +21,13 @@ export const ForgotPassword: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const { error } = await resetPassword(email);
-      if (error) {
-        setError(error.message);
+      const res = await resetPassword(email);
+      if (res.error) {
+        setError(res.error.message);
       } else {
+        if (res.devOtp) {
+          setRecoveryCode(res.devOtp);
+        }
         setIsSubmitted(true);
       }
     } catch (err: any) {
@@ -68,18 +72,38 @@ export const ForgotPassword: React.FC = () => {
               <CheckCircle2 className="w-6 h-6" />
             </div>
             <h3 className="text-base font-bold text-white">
-              Password Recovery Code Dispatched
+              Password Recovery Code Generated
             </h3>
             <p className="text-xs text-slate-300 leading-relaxed">
-              We've dispatched recovery instructions to <strong className="text-emerald-400">{email}</strong>.
+              Recovery instructions for <strong className="text-emerald-400">{email}</strong>.
             </p>
-            <div className="pt-3 space-y-2.5">
-              <Link to={`/reset-password?email=${encodeURIComponent(email)}`}>
+
+            {recoveryCode && (
+              <div className="p-3.5 rounded-2xl bg-emerald-950/70 border border-emerald-400/40 shadow-lg shadow-emerald-500/10 text-center">
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-xs font-bold text-emerald-300">Your Recovery Code:</span>
+                </div>
+                <div className="text-3xl font-black tracking-[0.25em] text-emerald-400 font-mono py-1">
+                  {recoveryCode}
+                </div>
+                <p className="text-[11px] text-slate-300 mt-1">
+                  Click the button below to reset your password with this code.
+                </p>
+              </div>
+            )}
+
+            <div className="p-2.5 rounded-xl bg-slate-950/50 border border-white/10 text-center text-[11px] text-slate-400 leading-relaxed">
+              <span>Checking manual inbox? Real email dispatch requires SMTP in <code>.env</code>. Without it, your code is displayed above!</span>
+            </div>
+
+            <div className="pt-2 space-y-2.5">
+              <Link to={`/reset-password?email=${encodeURIComponent(email)}${recoveryCode ? `&otp=${recoveryCode}` : ''}`}>
                 <button
                   type="button"
                   className="w-full py-3 px-4 rounded-xl font-extrabold text-sm text-slate-950 bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 hover:from-emerald-300 hover:to-teal-300 shadow-lg shadow-emerald-500/25 active:scale-[0.98] transition-all"
                 >
-                  Enter Recovery Code & Reset Password
+                  Enter Recovery Code & Reset Password &rarr;
                 </button>
               </Link>
               <Link to="/login" className="block text-center text-xs text-slate-400 hover:text-white pt-1">
@@ -92,7 +116,7 @@ export const ForgotPassword: React.FC = () => {
             <div className="text-center mb-4">
               <h3 className="text-lg font-bold text-white">Forgot Password</h3>
               <p className="text-xs text-slate-400 mt-1">
-                Enter your account email to receive a secure recovery link.
+                Enter your account email to receive your secure recovery code.
               </p>
             </div>
 
@@ -113,7 +137,6 @@ export const ForgotPassword: React.FC = () => {
                 <input
                   type="email"
                   required
-                  autoFocus
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@example.com"
@@ -127,21 +150,16 @@ export const ForgotPassword: React.FC = () => {
               disabled={isLoading}
               className="w-full py-3 px-4 rounded-xl font-extrabold text-sm text-slate-950 bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 hover:from-emerald-300 hover:to-teal-300 shadow-lg shadow-emerald-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2"
             >
-              {isLoading ? 'Sending...' : 'Send Recovery Link'}
+              {isLoading ? 'Generating Recovery Code...' : 'Generate Recovery Code'}
             </button>
 
-            <div className="text-center pt-3 border-t border-white/10">
-              <Link
-                to="/login"
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-emerald-300 transition-colors"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Back to Sign In</span>
+            <div className="text-center pt-2">
+              <Link to="/login" className="text-xs text-slate-400 hover:text-white">
+                Remember your password? Sign In
               </Link>
             </div>
           </form>
         )}
-
       </div>
     </div>
   );
