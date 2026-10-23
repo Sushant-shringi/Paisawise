@@ -35,6 +35,8 @@ import {
 import { Link } from 'react-router-dom';
 import { TransactionModal } from '@/components/transactions/TransactionModal';
 import { Transaction } from '@/types';
+import { ThemeSwitcher } from '@/components/layout/ThemeSwitcher';
+import { useTheme } from '@/context/ThemeContext';
 
 export const Dashboard: React.FC = () => {
   const { 
@@ -48,6 +50,8 @@ export const Dashboard: React.FC = () => {
     savingsGoals,
     deleteTransaction
   } = useFinance();
+
+  const { themeConfig } = useTheme();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
@@ -73,6 +77,9 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* PaisaWise Themes Bar (User Customization) */}
+      <ThemeSwitcher variant="pill-bar" className="w-full" />
+
       {/* Top Banner & Quick Action */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -313,7 +320,7 @@ export const Dashboard: React.FC = () => {
                   <XAxis dataKey="dayLabel" tick={{ fontSize: 10 }} stroke="#94a3b8" />
                   <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" tickFormatter={(val) => formatCompactCurrency(val)} />
                   <Tooltip content={<CustomCurrencyTooltip />} />
-                  <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="income" name="Income" fill={themeConfig.accentColor} radius={[4, 4, 0, 0]} />
                   <Bar dataKey="expense" name="Expense" fill="#f43f5e" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>

@@ -30,7 +30,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ onOpenQuickAdd, isOpen, onClose }) => {
   const { user, profile, isDemoMode, toggleDemoMode, signOut } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, themeConfig } = useTheme();
   const navigate = useNavigate();
 
   const navItems = [
@@ -163,10 +163,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQuickAdd, isOpen, onClos
             <div className="flex items-center gap-1">
               <button
                 onClick={toggleTheme}
-                aria-label="Toggle theme"
-                className="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-700 transition-colors"
+                aria-label="Toggle theme mode"
+                className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
+                title={`Current Theme: ${themeConfig.name}. Click to switch mode.`}
               >
-                {theme === 'dark' ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5" />}
+                <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: themeConfig.accentColor }} />
+                {theme === 'dark' ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-slate-600" />}
               </button>
               <button
                 onClick={handleLogout}

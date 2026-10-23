@@ -9,7 +9,183 @@
   
   body {
     font-family: var(--font-sans);
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* THEME 1: Professional Carbon (Default Dark) */
+/* -------------------------------------------------------------------------- */
+[data-theme="professional-carbon"] {
+  --color-bg-base: #0b0f19;
+  --color-bg-card: #111827;
+  --color-border: #1f2937;
+  --color-accent: #10b981;
+}
+[data-theme="professional-carbon"].dark,
+[data-theme="professional-carbon"] .dark\:bg-slate-950 {
+  background-color: #0b0f19 !important;
+}
+[data-theme="professional-carbon"] .dark\:bg-slate-900 {
+  background-color: #111827 !important;
+}
+[data-theme="professional-carbon"] .dark\:bg-slate-800 {
+  background-color: #1f293d !important;
+}
+[data-theme="professional-carbon"] .dark\:border-slate-800,
+[data-theme="professional-carbon"] .dark\:border-slate-700 {
+  border-color: #1f2937 !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* THEME 2: Crimson Dusk (Rich Wine & Gold Highlights) */
+/* -------------------------------------------------------------------------- */
+[data-theme="crimson-dusk"] {
+  --color-bg-base: #14070a;
+  --color-bg-card: #1f0b10;
+  --color-border: #4a1520;
+  --color-accent: #e11d48;
+}
+[data-theme="crimson-dusk"].dark,
+[data-theme="crimson-dusk"] .dark\:bg-slate-950 {
+  background-color: #14070a !important;
+}
+[data-theme="crimson-dusk"] .dark\:bg-slate-900 {
+  background-color: #1f0b10 !important;
+}
+[data-theme="crimson-dusk"] .dark\:bg-slate-800,
+[data-theme="crimson-dusk"] .dark\:bg-slate-800\/60,
+[data-theme="crimson-dusk"] .dark\:bg-slate-800\/40 {
+  background-color: #2e0f17 !important;
+}
+[data-theme="crimson-dusk"] .dark\:border-slate-800,
+[data-theme="crimson-dusk"] .dark\:border-slate-700 {
+  border-color: #4a1520 !important;
+}
+[data-theme="crimson-dusk"] .bg-emerald-600 {
+  background-color: #e11d48 !important;
+}
+[data-theme="crimson-dusk"] .hover\:bg-emerald-700:hover {
+  background-color: #be123c !important;
+}
+[data-theme="crimson-dusk"] .text-emerald-600,
+[data-theme="crimson-dusk"] .dark\:text-emerald-400 {
+  color: #fb7185 !important;
+}
+[data-theme="crimson-dusk"] .bg-emerald-50,
+[data-theme="crimson-dusk"] .dark\:bg-emerald-950,
+[data-theme="crimson-dusk"] .dark\:bg-emerald-950\/40 {
+  background-color: #3b0c16 !important;
+  color: #fecdd3 !important;
+}
+[data-theme="crimson-dusk"] .border-emerald-500,
+[data-theme="crimson-dusk"] .border-emerald-600 {
+  border-color: #e11d48 !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* THEME 3: Cobalt Steel (Midnight Navy & Cyber Cyan) */
+/* -------------------------------------------------------------------------- */
+[data-theme="cobalt-steel"] {
+  --color-bg-base: #050f1e;
+  --color-bg-card: #0a1931;
+  --color-border: #163666;
+  --color-accent: #06b6d4;
+}
+[data-theme="cobalt-steel"].dark,
+[data-theme="cobalt-steel"] .dark\:bg-slate-950 {
+  background-color: #050f1e !important;
+}
+[data-theme="cobalt-steel"] .dark\:bg-slate-900 {
+  background-color: #0a1931 !important;
+}
+[data-theme="cobalt-steel"] .dark\:bg-slate-800,
+[data-theme="cobalt-steel"] .dark\:bg-slate-800\/60,
+[data-theme="cobalt-steel"] .dark\:bg-slate-800\/40 {
+  background-color: #10264b !important;
+}
+[data-theme="cobalt-steel"] .dark\:border-slate-800,
+[data-theme="cobalt-steel"] .dark\:border-slate-700 {
+  border-color: #163666 !important;
+}
+[data-theme="cobalt-steel"] .bg-emerald-600 {
+  background-color: #0284c7 !important;
+}
+[data-theme="cobalt-steel"] .hover\:bg-emerald-700:hover {
+  background-color: #0369a1 !important;
+}
+[data-theme="cobalt-steel"] .text-emerald-600,
+[data-theme="cobalt-steel"] .dark\:text-emerald-400 {
+  color: #38bdf8 !important;
+}
+[data-theme="cobalt-steel"] .bg-emerald-50,
+[data-theme="cobalt-steel"] .dark\:bg-emerald-950,
+[data-theme="cobalt-steel"] .dark\:bg-emerald-950\/40 {
+  background-color: #0c2d54 !important;
+  color: #bae6fd !important;
+}
+[data-theme="cobalt-steel"] .border-emerald-500,
+[data-theme="cobalt-steel"] .border-emerald-600 {
+  border-color: #0284c7 !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* THEME 4: Ember Glow (Warm Espresso Charcoal & Orange Flame) */
+/* -------------------------------------------------------------------------- */
+[data-theme="ember-glow"] {
+  --color-bg-base: #140d08;
+  --color-bg-card: #1f140c;
+  --color-border: #4d2f19;
+  --color-accent: #f97316;
+}
+[data-theme="ember-glow"].dark,
+[data-theme="ember-glow"] .dark\:bg-slate-950 {
+  background-color: #140d08 !important;
+}
+[data-theme="ember-glow"] .dark\:bg-slate-900 {
+  background-color: #1f140c !important;
+}
+[data-theme="ember-glow"] .dark\:bg-slate-800,
+[data-theme="ember-glow"] .dark\:bg-slate-800\/60,
+[data-theme="ember-glow"] .dark\:bg-slate-800\/40 {
+  background-color: #2e1e12 !important;
+}
+[data-theme="ember-glow"] .dark\:border-slate-800,
+[data-theme="ember-glow"] .dark\:border-slate-700 {
+  border-color: #4d2f19 !important;
+}
+[data-theme="ember-glow"] .bg-emerald-600 {
+  background-color: #ea580c !important;
+}
+[data-theme="ember-glow"] .hover\:bg-emerald-700:hover {
+  background-color: #c2410c !important;
+}
+[data-theme="ember-glow"] .text-emerald-600,
+[data-theme="ember-glow"] .dark\:text-emerald-400 {
+  color: #fb923c !important;
+}
+[data-theme="ember-glow"] .bg-emerald-50,
+[data-theme="ember-glow"] .dark\:bg-emerald-950,
+[data-theme="ember-glow"] .dark\:bg-emerald-950\/40 {
+  background-color: #3c1e0e !important;
+  color: #fed7aa !important;
+}
+[data-theme="ember-glow"] .border-emerald-500,
+[data-theme="ember-glow"] .border-emerald-600 {
+  border-color: #ea580c !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* THEME 5: Mint Frost (Crisp Daylight Light Mode) */
+/* -------------------------------------------------------------------------- */
+[data-theme="mint-frost"] {
+  --color-bg-base: #f0fdf4;
+  --color-bg-card: #ffffff;
+  --color-border: #d1fae5;
+  --color-accent: #059669;
+}
+[data-theme="mint-frost"] body {
+  background-color: #f0fdf4 !important;
 }
 
 /* Custom modern scrollbar */

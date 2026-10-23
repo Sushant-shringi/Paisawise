@@ -19,9 +19,11 @@ import {
   ShieldCheck, 
   Sparkles,
   CheckCircle,
-  Database
+  Database,
+  Palette
 } from 'lucide-react';
 import { supabaseApi } from '@/lib/supabase/api';
+import { ThemeSwitcher } from '@/components/layout/ThemeSwitcher';
 
 export const Settings: React.FC = () => {
   const { user, profile, isDemoMode, toggleDemoMode, refreshProfile } = useAuth();
@@ -162,35 +164,21 @@ export const Settings: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Appearance & Theme Preference */}
+      {/* Appearance & PaisaWise Theme Studio */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
-            {theme === 'dark' ? <Moon className="w-5 h-5 text-amber-400" /> : <Sun className="w-5 h-5 text-amber-500" />}
-            <CardTitle>Interface Appearance</CardTitle>
+            <Palette className="w-5 h-5 text-emerald-600" />
+            <CardTitle>PaisaWise Theme Studio</CardTitle>
           </div>
-          <span className="text-xs text-slate-400 capitalize">Current: {theme} Mode</span>
+          <span className="text-xs font-bold text-slate-500">5 Distinct Styles</span>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                Light & Dark Mode Switch
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Toggle between clear high-contrast light styling and modern eye-friendly dark slate.
-              </p>
-            </div>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Select a custom colorway for your personal finance dashboard. All charts, badges, cards, and accent colors dynamically update in real time.
+          </p>
 
-            <Button
-              onClick={toggleTheme}
-              variant="outline"
-              size="sm"
-              leftIcon={theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
-            >
-              Switch to {theme === 'dark' ? 'Light' : 'Dark'} Mode
-            </Button>
-          </div>
+          <ThemeSwitcher variant="cards" />
         </CardContent>
       </Card>
 

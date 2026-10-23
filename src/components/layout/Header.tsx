@@ -9,6 +9,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { useFinance } from '@/context/FinanceContext';
+import { ThemeSwitcher } from '@/components/layout/ThemeSwitcher';
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear } from 'date-fns';
 import clsx from 'clsx';
 
@@ -126,8 +127,11 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileNav }) => {
         </div>
       </div>
 
-      {/* Right Controls: Date Range Filter + Notification Center */}
+      {/* Right Controls: Theme Switcher + Date Range Filter + Notification Center */}
       <div className="flex items-center gap-2 sm:gap-3">
+        {/* PaisaWise Theme Switcher Dropdown */}
+        <ThemeSwitcher variant="dropdown" />
+
         {/* Date Filter Dropdown */}
         <div className="relative" ref={dateRef}>
           <button
