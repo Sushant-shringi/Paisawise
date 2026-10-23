@@ -104,16 +104,28 @@ export const Login: React.FC = () => {
               leftIcon={<Mail className="w-4 h-4" />}
             />
 
-            <Input
-              label="Password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              leftIcon={<Lock className="w-4 h-4" />}
-            />
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  Password
+                </label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              <Input
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                leftIcon={<Lock className="w-4 h-4" />}
+              />
+            </div>
 
             <Button
               type="submit"

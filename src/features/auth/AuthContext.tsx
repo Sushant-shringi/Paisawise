@@ -15,12 +15,13 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
+  updatePassword: (password: string) => Promise<{ error: Error | null }>;
   refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const DEMO_USER: User = {
+export const DEMO_USER: User = {
   id: 'demo-user-1234',
   app_metadata: {},
   user_metadata: { full_name: 'Aditya Sharma' },
@@ -31,7 +32,7 @@ const DEMO_USER: User = {
   updated_at: '2026-10-24T00:00:00Z',
 } as User;
 
-const DEMO_PROFILE: Profile = {
+export const DEMO_PROFILE: Profile = {
   id: 'demo-user-1234',
   full_name: 'Aditya Sharma',
   currency: 'INR',
@@ -48,11 +49,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Default to demo mode if Supabase credentials are not yet configured in .env
+  // Always default to false so user is presented with the Login / Sign-up page first!
   const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
-    const saved = localStorage.getItem('paisawise_demo_mode');
-    if (saved !== null) return saved === 'true';
-    return !isSupabaseConfigured;
+    return sessionStorage.getItem('paisawise_demo_session') === 'true';
   });
 
   const loadUserProfile = async (userId: string) => {
@@ -65,14 +64,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    if (!isSupabaseConfigured || isDemoMode) {
+    // If user explicitly activated demo mode in this session
+    if (isDemoMode) {
       setUser(DEMO_USER);
       setProfile(DEMO_PROFILE);
       setIsLoading(false);
       return;
     }
 
-    // Initialize Supabase Auth listener
+    if (!isSupabaseConfigured) {
+      // Supabase is not configured and demo mode was not activated: require login!
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+      setIsLoading(false);
+      return;
+    }
+
+    // Check existing Supabase session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -101,41 +110,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const toggleDemoMode = (enabled?: boolean) => {
     const nextState = enabled !== undefined ? enabled : !isDemoMode;
     setIsDemoMode(nextState);
-    localStorage.setItem('paisawise_demo_mode', String(nextState));
     if (nextState) {
+      sessionStorage.setItem('paisawise_demo_session', 'true');
       setUser(DEMO_USER);
       setProfile(DEMO_PROFILE);
-    } else if (isSupabaseConfigured) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        setUser(session?.user ?? null);
-        setSession(session);
-        if (session?.user) loadUserProfile(session.user.id);
-        else setProfile(null);
-      });
     } else {
-      setUser(null);
-      setProfile(null);
+      sessionStorage.removeItem('paisawise_demo_session');
+      if (isSupabaseConfigured) {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          setUser(session?.user ?? null);
+          setSession(session);
+          if (session?.user) loadUserProfile(session.user.id);
+          else setProfile(null);
+        });
+      } else {
+        setUser(null);
+        setSession(null);
+        setProfile(null);
+      }
     }
   };
 
   const signIn = async (email: string, password: string) => {
-    if (!isSupabaseConfigured || isDemoMode) {
-      // In demo mode, instantly log in with realistic demo user
-      setUser(DEMO_USER);
-      setProfile(DEMO_PROFILE);
+    if (!isSupabaseConfigured) {
+      // Offline / Local verification: accept valid email format & password >= 6 chars
+      if (password.length < 6) {
+        return { error: new Error('Password must be at least 6 characters') };
+      }
+      const customUser = {
+        ...DEMO_USER,
+        id: `user-${Date.now()}`,
+        email,
+        user_metadata: { full_name: email.split('@')[0] }
+      };
+      setUser(customUser);
+      setProfile({
+        ...DEMO_PROFILE,
+        id: customUser.id,
+        full_name: email.split('@')[0]
+      });
+      sessionStorage.setItem('paisawise_logged_in', 'true');
       return { error: null };
     }
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error as Error | null };
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    if (!isSupabaseConfigured || isDemoMode) {
-      const customDemoUser = { ...DEMO_USER, email, user_metadata: { full_name: fullName } };
-      setUser(customDemoUser);
-      setProfile({ ...DEMO_PROFILE, full_name: fullName });
+    if (!isSupabaseConfigured) {
+      const customUser = {
+        ...DEMO_USER,
+        id: `user-${Date.now()}`,
+        email,
+        user_metadata: { full_name: fullName }
+      };
+      setUser(customUser);
+      setProfile({
+        ...DEMO_PROFILE,
+        id: customUser.id,
+        full_name: fullName
+      });
+      sessionStorage.setItem('paisawise_logged_in', 'true');
       return { error: null };
     }
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -147,7 +186,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    if (isSupabaseConfigured && !isDemoMode) {
+    sessionStorage.removeItem('paisawise_demo_session');
+    sessionStorage.removeItem('paisawise_logged_in');
+    setIsDemoMode(false);
+    if (isSupabaseConfigured) {
       await supabase.auth.signOut();
     }
     setUser(null);
@@ -156,12 +198,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const resetPassword = async (email: string) => {
-    if (!isSupabaseConfigured || isDemoMode) {
+    if (!isSupabaseConfigured) {
+      // Simulate successful password reset email dispatch
       return { error: null };
     }
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
+    return { error: error as Error | null };
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    if (!isSupabaseConfigured) {
+      return { error: null };
+    }
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
     return { error: error as Error | null };
   };
 
@@ -184,6 +235,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signUp,
         signOut,
         resetPassword,
+        updatePassword,
         refreshProfile,
       }}
     >

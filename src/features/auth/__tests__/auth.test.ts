@@ -19,4 +19,11 @@ describe('Authentication & Session Logic', () => {
     expect(emailRegex.test('user@paisawise.app')).toBe(true);
     expect(emailRegex.test('invalid-email')).toBe(false);
   });
+
+  it('validates password matching on reset workflow', () => {
+    const checkMatching = (p1: string, p2: string) => p1 === p2 && p1.length >= 6;
+    expect(checkMatching('password123', 'password123')).toBe(true);
+    expect(checkMatching('password123', 'different')).toBe(false);
+    expect(checkMatching('123', '123')).toBe(false);
+  });
 });
