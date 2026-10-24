@@ -9,7 +9,8 @@ import {
   KeyRound,
   RotateCw,
   ArrowLeft,
-  CheckCircle2
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -96,7 +97,12 @@ export const Login: React.FC<{ initialMode?: 'signin' | 'signup' }> = ({ initial
       } else if (res.requiresVerification) {
         setOtpEmail(res.email || email);
         setOtpStep(true);
-        setOtpCode('');
+        if (res.devOtp) {
+          setDevOtpNotice(res.devOtp);
+          setOtpCode(res.devOtp);
+        } else {
+          setOtpCode('');
+        }
         setOtpNotice(res.message || `Verification code sent to ${res.email || email}. Please check your inbox.`);
       } else {
         navigate('/');
@@ -140,8 +146,13 @@ export const Login: React.FC<{ initialMode?: 'signin' | 'signup' }> = ({ initial
       if (res.error) {
         setError(res.error.message);
       } else {
-        setOtpCode('');
-        setOtpNotice(res.message || 'A fresh verification OTP has been sent to your email.');
+        if (res.devOtp) {
+          setDevOtpNotice(res.devOtp);
+          setOtpCode(res.devOtp);
+        } else {
+          setOtpCode('');
+        }
+        setOtpNotice(res.message || 'A fresh verification OTP has been generated.');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to request new OTP');
@@ -186,6 +197,21 @@ export const Login: React.FC<{ initialMode?: 'signin' | 'signup' }> = ({ initial
                 Enter the 6-digit security code for <strong className="text-emerald-400">{otpEmail}</strong>
               </p>
             </div>
+
+            {devOtpNotice && (
+              <div className="p-3.5 rounded-xl bg-amber-500/15 border border-amber-400/30 text-amber-200 text-xs space-y-1.5">
+                <div className="font-bold flex items-center gap-1.5 text-amber-300">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>Email Provider Not Configured</span>
+                </div>
+                <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                  Your server does not have live SMTP credentials set yet. Your 6-digit verification code is:
+                </p>
+                <div className="font-mono text-xl font-extrabold tracking-widest text-emerald-300 bg-slate-950/70 p-2 rounded-lg text-center border border-white/10 select-all">
+                  {devOtpNotice}
+                </div>
+              </div>
+            )}
 
             {otpNotice && (
               <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 text-xs font-medium flex items-center gap-2">

@@ -6,6 +6,7 @@ export const VerifyEmail: React.FC = () => {
   const [step, setStep] = useState<'enter_email' | 'enter_otp' | 'verified'>('enter_email');
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
+  const [devOtp, setDevOtp] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +34,11 @@ export const VerifyEmail: React.FC = () => {
       if (!res.ok) {
         setError(data.error || 'Failed to send OTP.');
       } else {
-        setMessage('A 6-digit verification code has been sent to your email inbox.');
+        setMessage(data.message || 'A 6-digit verification code has been generated.');
+        if (data.devOtp) {
+          setDevOtp(data.devOtp);
+          setOtp(data.devOtp);
+        }
         setStep('enter_otp');
       }
     } catch (err: any) {
@@ -141,6 +146,21 @@ export const VerifyEmail: React.FC = () => {
                 A 6-digit code was sent to <strong className="text-emerald-400">{email}</strong>
               </p>
             </div>
+
+            {devOtp && (
+              <div className="p-3.5 rounded-xl bg-amber-500/15 border border-amber-400/30 text-amber-200 text-xs space-y-1.5 mb-3">
+                <div className="font-bold flex items-center gap-1.5 text-amber-300">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>Email Provider Not Configured</span>
+                </div>
+                <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                  Live email credentials (SMTP/Resend) are not yet configured on the server. Your verification code is:
+                </p>
+                <div className="font-mono text-xl font-extrabold tracking-widest text-emerald-300 bg-slate-950/70 p-2 rounded-lg text-center border border-white/10 select-all">
+                  {devOtp}
+                </div>
+              </div>
+            )}
 
             {message && (
               <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 text-xs font-medium flex items-center gap-2">

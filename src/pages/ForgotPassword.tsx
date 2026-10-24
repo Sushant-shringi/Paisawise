@@ -26,7 +26,8 @@ export const ForgotPassword: React.FC = () => {
         setError(res.error.message);
       } else {
         // Automatically transition to the Reset Password step
-        navigate(`/reset-password?email=${encodeURIComponent(normalizedEmail)}`);
+        const otpParam = res.devOtp ? `&otp=${encodeURIComponent(res.devOtp)}` : '';
+        navigate(`/reset-password?email=${encodeURIComponent(normalizedEmail)}${otpParam}`);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to send recovery code');

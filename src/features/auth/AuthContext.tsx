@@ -203,7 +203,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         setUser(localUser);
         setProfile(data.profile);
-        return { error: null };
+        return { error: null, devOtp: data.devOtp, message: data.message };
       } catch (err: any) {
         return { error: new Error(err.message || 'Network error connecting to local server') };
       }
@@ -335,7 +335,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!res.ok) {
           return { error: new Error(data.error || 'Failed to request recovery code') };
         }
-        return { error: null };
+        return { error: null, devOtp: data.devOtp, message: data.message };
       } catch (err: any) {
         return { error: new Error(err.message || 'Network error during password reset request') };
       }
@@ -358,7 +358,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!res.ok) {
           return { error: new Error(data.error || 'Failed to reset password') };
         }
-        return { error: null };
+        return { error: null, devOtp: data.devOtp, message: data.message };
       } catch (err: any) {
         return { error: new Error(err.message || 'Network error during password reset') };
       }
