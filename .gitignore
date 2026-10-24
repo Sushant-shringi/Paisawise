@@ -35,3 +35,8 @@ data/
 .env.*
 !.env.example
 
+
+# Media recordings
+recordings/
+*.webm
+*.mp4
