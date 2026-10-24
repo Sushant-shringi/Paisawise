@@ -45,7 +45,7 @@ export function checkEmailConfigured(): EmailProviderStatus {
   }
 
   const smtpUser = process.env.SMTP_USER?.trim();
-  const smtpPass = process.env.SMTP_PASS?.trim();
+  const smtpPass = (process.env.SMTP_PASS || process.env.SMTP_PASSWORD)?.trim();
   if (smtpUser && smtpPass) {
     return { configured: true, provider: 'smtp', details: `SMTP configured for ${smtpUser}` };
   }
@@ -62,7 +62,7 @@ export function getTransporter(): nodemailer.Transporter | null {
 
   const user = process.env.SMTP_USER?.trim();
   // Strip spaces from Google App Password (e.g. "abcd efgh ijkl mnop" -> "abcdefghijklmnop")
-  const pass = process.env.SMTP_PASS?.replace(/\s+/g, '').trim();
+  const pass = (process.env.SMTP_PASS || process.env.SMTP_PASSWORD)?.replace(/\s+/g, '').trim();
   const host = process.env.SMTP_HOST?.trim();
   const port = Number(process.env.SMTP_PORT) || 587;
 
