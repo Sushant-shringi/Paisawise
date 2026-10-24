@@ -10,8 +10,10 @@ import {
   googleSheetsService, 
   extractSpreadsheetId, 
   formatTransactionsToCsv, 
-  formatTransactionsToTsv 
+  formatTransactionsToTsv,
+  copyToClipboard
 } from '@/lib/google-sheets/sheetsClient';
+import { INITIAL_TRANSACTIONS } from '@/lib/mockData';
 import { 
   Sheet, 
   RefreshCw, 
@@ -50,6 +52,15 @@ export const GoogleSheets: React.FC = () => {
   const [syncStatusMsg, setSyncStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showConfigGuide, setShowConfigGuide] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [showTsvPreview, setShowTsvPreview] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+
+  // If user has zero transactions in their account, fall back to rich sample data (12 transactions)
+  // so they can immediately test and see the Google Sheet populated!
+  const effectiveTransactions = transactions && transactions.length > 0 
+    ? transactions 
+    : INITIAL_TRANSACTIONS;
+  const isSampleData = !transactions || transactions.length === 0;
 
   // Extracted clean spreadsheet ID
   const resolvedSpreadsheetId = extractSpreadsheetId(inputUrlOrId) || sheetConnection?.spreadsheet_id || '';
@@ -70,7 +81,7 @@ export const GoogleSheets: React.FC = () => {
     try {
       const result = await googleSheetsService.syncTransactions(
         targetSpreadsheetId,
-        transactions,
+        effectiveTransactions,
         sheetName
       );
 
@@ -110,7 +121,7 @@ export const GoogleSheets: React.FC = () => {
       // Initial sync with all existing transactions
       const result = await googleSheetsService.syncTransactions(
         newId,
-        transactions,
+        effectiveTransactions,
         sheetName
       );
 
@@ -148,7 +159,7 @@ export const GoogleSheets: React.FC = () => {
 
   // Download CSV formatted specifically for Google Sheets
   const handleDownloadCsv = () => {
-    const csvContent = formatTransactionsToCsv(transactions);
+    const csvContent = formatTransactionsToCsv(effectiveTransactions);
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -162,10 +173,23 @@ export const GoogleSheets: React.FC = () => {
 
   // Copy Tab-Separated Values for direct paste into Google Sheets (Ctrl+V)
   const handleCopyTsv = async () => {
-    const tsvContent = formatTransactionsToTsv(transactions);
-    await navigator.clipboard.writeText(tsvContent);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2500);
+    const tsvContent = formatTransactionsToTsv(effectiveTransactions);
+    const success = await copyToClipboard(tsvContent);
+    if (success) {
+      setIsCopied(true);
+      setCopyFeedback(
+        `✓ Copied ${effectiveTransactions.length} rows to clipboard! In your Google Sheet: Click cell A1 once (do NOT double-click), then press Ctrl+V.`
+      );
+      setTimeout(() => {
+        setIsCopied(false);
+      }, 3500);
+    } else {
+      setSyncStatusMsg({
+        type: 'error',
+        text: 'Direct clipboard copy was restricted by your browser. Please use the "Manual Copy Box" below to select and copy.'
+      });
+      setShowTsvPreview(true);
+    }
   };
 
   return (
@@ -349,23 +373,64 @@ export const GoogleSheets: React.FC = () => {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Sheet className="w-5 h-5 text-emerald-600" />
-            <CardTitle>Google Sheets Direct Export & Import Tools</CardTitle>
+            <CardTitle>Google Sheets Direct Export & Paste Tools</CardTitle>
           </div>
-          <span className="text-xs text-slate-400">{transactions.length} transactions ready</span>
+          <span className="text-xs text-slate-400">
+            {effectiveTransactions.length} transactions {isSampleData ? '(sample ledger)' : ''} ready
+          </span>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-xs text-slate-600 dark:text-slate-400">
-            Export your entire transaction ledger into Google Sheets with 100% formatted columns, colors, and decimal precision:
+            Export your entire transaction ledger into Google Sheets with 100% formatted columns, headers, and decimal precision:
           </p>
+
+          {/* Step-by-Step Paste Guidance Callout */}
+          <div className="p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-50/70 dark:bg-emerald-950/30 text-xs space-y-2">
+            <div className="flex items-center gap-1.5 font-bold text-emerald-800 dark:text-emerald-300">
+              <Zap className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span>How to Paste into Google Sheets without Issues:</span>
+            </div>
+            <ol className="list-decimal list-inside space-y-1 text-slate-700 dark:text-slate-300">
+              <li>Click the <strong>"Copy All Data for Google Sheets (Ctrl+V)"</strong> button below.</li>
+              <li>
+                Switch to your Google Sheet (
+                <a 
+                  href={`https://docs.google.com/spreadsheets/d/${resolvedSpreadsheetId || '1hgC9wdhGU68c7xdxBdltEFrBEJtXS2F1MCNJawKQ2lA'}/edit`} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-emerald-600 dark:text-emerald-400 font-semibold underline"
+                >
+                  open your spreadsheet here
+                </a>
+                ).
+              </li>
+              <li>
+                <strong>Click cell A1 ONCE</strong> so the single blue boundary outline is on A1 (
+                <strong className="text-amber-700 dark:text-amber-400">Important: Do NOT double-click into cell A1</strong>, 
+                as double-clicking enters text-editing mode inside the single cell).
+              </li>
+              <li>
+                Press <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono text-[11px] font-bold">Ctrl + V</kbd> (or <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono text-[11px] font-bold">Cmd + V</kbd>). Google Sheets will automatically distribute all data across columns A through H!
+              </li>
+            </ol>
+          </div>
+
+          {/* Copy Confirmation Feedback */}
+          {copyFeedback && (
+            <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span>{copyFeedback}</span>
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-3">
             <Button
               onClick={handleCopyTsv}
-              variant="outline"
+              variant="primary"
               size="sm"
-              leftIcon={isCopied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+              leftIcon={isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             >
-              {isCopied ? 'Copied to Clipboard! (Paste in Google Sheets)' : 'Copy All Data for Google Sheets (Ctrl+V)'}
+              {isCopied ? 'Copied to Clipboard! (Paste with Ctrl+V)' : 'Copy All Data for Google Sheets (Ctrl+V)'}
             </Button>
 
             <Button
@@ -387,6 +452,51 @@ export const GoogleSheets: React.FC = () => {
                 <span>Open Google Sheet ({resolvedSpreadsheetId.substring(0, 8)}...)</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
+            )}
+          </div>
+
+          {/* Manual Copy / TSV Preview Box */}
+          <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setShowTsvPreview(!showTsvPreview)}
+                className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+              >
+                <span>{showTsvPreview ? '▼ Hide Direct TSV Data Box' : '▶ Show Direct TSV Data Box (Manual Copy Option)'}</span>
+              </button>
+            </div>
+            {showTsvPreview && (
+              <div className="space-y-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                    Tab-Separated Values ({effectiveTransactions.length} rows ready):
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      await copyToClipboard(formatTransactionsToTsv(effectiveTransactions));
+                      setIsCopied(true);
+                      setCopyFeedback(`✓ Copied ${effectiveTransactions.length} rows! Now click A1 in Google Sheets and press Ctrl+V.`);
+                      setTimeout(() => setIsCopied(false), 3000);
+                    }}
+                    leftIcon={<Copy className="w-3.5 h-3.5" />}
+                  >
+                    Select All & Copy
+                  </Button>
+                </div>
+                <textarea
+                  readOnly
+                  rows={5}
+                  value={formatTransactionsToTsv(effectiveTransactions)}
+                  onFocus={(e) => e.target.select()}
+                  className="w-full font-mono text-[11px] p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 selection:bg-emerald-500 selection:text-white"
+                />
+                <p className="text-[11px] text-slate-500">
+                  Manual Tip: Click inside the box above, press <kbd className="px-1 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono font-bold">Ctrl+A</kbd> then <kbd className="px-1 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono font-bold">Ctrl+C</kbd>. Then in your Google Sheet, click cell A1 once and press <kbd className="px-1 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono font-bold">Ctrl+V</kbd>.
+                </p>
+              </div>
             )}
           </div>
         </CardContent>
