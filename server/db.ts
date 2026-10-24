@@ -1,29 +1,238 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
+import { Pool, types } from 'pg';
+
+// Configure PostgreSQL type parsers:
+// OID 1700 is NUMERIC / DECIMAL -> parse as JavaScript float to match financial calculations
+types.setTypeParser(1700, (val: string) => parseFloat(val));
+// OID 20 is INT8 (bigint, like COUNT(*)) -> parse as JavaScript integer
+types.setTypeParser(20, (val: string) => parseInt(val, 10));
+
+export interface PreparedStatement {
+  get<T = any>(...params: any[]): Promise<T | undefined> | (T | undefined);
+  all<T = any>(...params: any[]): Promise<T[]> | T[];
+  run(...params: any[]): Promise<{ changes: number; lastInsertRowid?: number | bigint }> | { changes: number; lastInsertRowid?: number | bigint };
+}
+
+export interface PaisaWiseDb {
+  type: 'sqlite' | 'postgres';
+  prepare(sql: string): PreparedStatement;
+  exec(sql: string): Promise<void> | void;
+  close(): Promise<void> | void;
+  transaction<T>(callback: (tx: PaisaWiseDb) => Promise<T>): Promise<T>;
+  sqlite?: DatabaseSync;
+  pool?: Pool;
+}
 
 export interface DatabaseContext {
-  db: DatabaseSync;
+  db: PaisaWiseDb | DatabaseSync;
   close: () => void;
 }
 
-export function initializeDatabase(dbPath?: string): DatabaseSync {
-  const targetPath = dbPath || process.env.DATABASE_PATH || path.resolve(process.cwd(), 'data', 'paisawise.db');
+/**
+ * Converts SQLite ? parameter placeholders to PostgreSQL $1, $2, ... placeholders,
+ * safely ignoring any question marks that appear inside single or double quoted string literals.
+ */
+export function convertPlaceholders(sql: string): string {
+  let paramIndex = 1;
+  let inString = false;
+  let quoteChar = '';
+  let result = '';
 
-  if (targetPath !== ':memory:') {
-    const dir = path.dirname(targetPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+  for (let i = 0; i < sql.length; i++) {
+    const char = sql[i];
+    if (inString) {
+      result += char;
+      if (char === quoteChar && sql[i - 1] !== '\\') {
+        inString = false;
+      }
+    } else if (char === "'" || char === '"') {
+      inString = true;
+      quoteChar = char;
+      result += char;
+    } else if (char === '?') {
+      result += `$${paramIndex++}`;
+    } else {
+      result += char;
     }
   }
+  return result;
+}
 
-  const db = new DatabaseSync(targetPath);
-  db.exec('PRAGMA foreign_keys = ON;');
+export class PostgresDbAdapter implements PaisaWiseDb {
+  type = 'postgres' as const;
+  pool: Pool;
 
-  // Run migrations
-  runMigrations(db);
+  constructor(pool: Pool) {
+    this.pool = pool;
+  }
 
-  return db;
+  prepare(sql: string): PreparedStatement {
+    const pgSql = convertPlaceholders(sql);
+    const pool = this.pool;
+
+    return {
+      async get<T = any>(...params: any[]): Promise<T | undefined> {
+        const res = await pool.query(pgSql, params);
+        return res.rows[0];
+      },
+      async all<T = any>(...params: any[]): Promise<T[]> {
+        const res = await pool.query(pgSql, params);
+        return res.rows;
+      },
+      async run(...params: any[]): Promise<{ changes: number }> {
+        const res = await pool.query(pgSql, params);
+        return { changes: res.rowCount ?? 0 };
+      }
+    };
+  }
+
+  async exec(sql: string): Promise<void> {
+    await this.pool.query(sql);
+  }
+
+  async close(): Promise<void> {
+    await this.pool.end();
+  }
+
+  async transaction<T>(callback: (tx: PaisaWiseDb) => Promise<T>): Promise<T> {
+    const client = await this.pool.connect();
+    const clientAdapter: PaisaWiseDb = {
+      type: 'postgres',
+      prepare(sql: string) {
+        const pgSql = convertPlaceholders(sql);
+        return {
+          async get<T = any>(...params: any[]): Promise<T | undefined> {
+            const res = await client.query(pgSql, params);
+            return res.rows[0];
+          },
+          async all<T = any>(...params: any[]): Promise<T[]> {
+            const res = await client.query(pgSql, params);
+            return res.rows;
+          },
+          async run(...params: any[]): Promise<{ changes: number }> {
+            const res = await client.query(pgSql, params);
+            return { changes: res.rowCount ?? 0 };
+          }
+        };
+      },
+      async exec(sql: string) {
+        await client.query(sql);
+      },
+      async close() {},
+      async transaction<R>(nestedCallback: (tx: PaisaWiseDb) => Promise<R>): Promise<R> {
+        return nestedCallback(this);
+      }
+    };
+
+    try {
+      await client.query('BEGIN');
+      const result = await callback(clientAdapter);
+      await client.query('COMMIT');
+      return result;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+}
+
+export class SqliteDbAdapter implements PaisaWiseDb {
+  type = 'sqlite' as const;
+  sqlite: DatabaseSync;
+
+  constructor(sqlite: DatabaseSync) {
+    this.sqlite = sqlite;
+  }
+
+  prepare(sql: string): PreparedStatement {
+    const stmt = this.sqlite.prepare(sql);
+
+    return {
+      get<T = any>(...params: any[]): T | undefined {
+        return stmt.get(...params) as T | undefined;
+      },
+      all<T = any>(...params: any[]): T[] {
+        return stmt.all(...params) as T[];
+      },
+      run(...params: any[]): { changes: number; lastInsertRowid: number | bigint } {
+        return stmt.run(...params) as { changes: number; lastInsertRowid: number | bigint };
+      }
+    };
+  }
+
+  exec(sql: string): void {
+    this.sqlite.exec(sql);
+  }
+
+  close(): void {
+    this.sqlite.close();
+  }
+
+  async transaction<T>(callback: (tx: PaisaWiseDb) => Promise<T>): Promise<T> {
+    this.sqlite.exec('BEGIN TRANSACTION;');
+    try {
+      const result = await callback(this);
+      this.sqlite.exec('COMMIT;');
+      return result;
+    } catch (err) {
+      this.sqlite.exec('ROLLBACK;');
+      throw err;
+    }
+  }
+}
+
+export function ensureDbAdapter(db: PaisaWiseDb | DatabaseSync): PaisaWiseDb {
+  if (db && 'type' in db && (db.type === 'postgres' || db.type === 'sqlite')) {
+    return db as PaisaWiseDb;
+  }
+  return new SqliteDbAdapter(db as DatabaseSync);
+}
+
+/**
+ * Initializes database connection:
+ * - If dbPath is ':memory:' (e.g. test suites), uses in-memory SQLite.
+ * - If process.env.DATABASE_URL is set, connects to Supabase PostgreSQL.
+ * - Otherwise falls back to local SQLite at DATABASE_PATH or ./data/paisawise.db.
+ */
+export function initializeDatabase(dbPath?: string): PaisaWiseDb | DatabaseSync {
+  // 1. Explicit in-memory database (always used by automated Vitest suites)
+  if (dbPath === ':memory:') {
+    const sqlite = new DatabaseSync(':memory:');
+    sqlite.exec('PRAGMA foreign_keys = ON;');
+    runMigrations(sqlite);
+    return new SqliteDbAdapter(sqlite);
+  }
+
+  // 2. PostgreSQL (Supabase) via DATABASE_URL
+  if (process.env.DATABASE_URL) {
+    const masked = process.env.DATABASE_URL.replace(/:\/\/([^:]+):([^@]+)@/, '://$1:********@');
+    console.log(`[PaisaWise Database] Initializing Supabase PostgreSQL via Session Pooler: ${masked}`);
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000
+    });
+    return new PostgresDbAdapter(pool);
+  }
+
+  // 3. Fallback: Local SQLite File
+  const targetPath = dbPath || process.env.DATABASE_PATH || path.resolve(process.cwd(), 'data', 'paisawise.db');
+  const dir = path.dirname(targetPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  console.log(`[PaisaWise Database] Initializing Local SQLite at: ${targetPath}`);
+  const sqlite = new DatabaseSync(targetPath);
+  sqlite.exec('PRAGMA foreign_keys = ON;');
+  runMigrations(sqlite);
+  return new SqliteDbAdapter(sqlite);
 }
 
 export function runMigrations(db: DatabaseSync) {

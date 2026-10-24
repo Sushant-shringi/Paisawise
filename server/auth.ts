@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import { DatabaseSync } from 'node:sqlite';
+import { PaisaWiseDb } from './db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'paisawise-super-secret-local-jwt-key-32chars!';
 const OTP_EXPIRY_MINUTES = 10;
@@ -68,14 +69,14 @@ export function generateOtpCode(): string {
   return crypto.randomInt(100000, 999999).toString();
 }
 
-export function createOtp(
-  db: DatabaseSync, 
+export async function createOtp(
+  db: PaisaWiseDb | DatabaseSync | any, 
   userId: string | null, 
   email: string, 
   purpose: string = 'signup_verification'
-): { success: boolean; error?: string; otpCode?: string } {
+): Promise<{ success: boolean; error?: string; otpCode?: string }> {
   // Check rate limit: Check recent OTP requests within RATE_LIMIT_SECONDS
-  const recentOtp = db.prepare(`
+  const recentOtp = await db.prepare(`
     SELECT created_at FROM otps 
     WHERE email = ? AND purpose = ?
     ORDER BY created_at DESC LIMIT 1
@@ -90,18 +91,18 @@ export function createOtp(
   }
 
   // Invalidate any existing active OTP for this email and purpose
-  db.prepare(`
+  const now = new Date();
+  await db.prepare(`
     UPDATE otps 
-    SET verified_at = 'invalidated' 
+    SET verified_at = ? 
     WHERE email = ? AND purpose = ? AND verified_at IS NULL
-  `).run(email, purpose);
+  `).run(now.toISOString(), email, purpose);
 
   const otpCode = generateOtpCode();
   const id = `otp-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-  const now = new Date();
   const expiresAt = new Date(now.getTime() + OTP_EXPIRY_MINUTES * 60 * 1000).toISOString();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO otps (id, user_id, email, otp_code, purpose, attempts, max_attempts, expires_at, verified_at, created_at)
     VALUES (?, ?, ?, ?, ?, 0, ?, ?, NULL, ?)
   `).run(id, userId, email, otpCode, purpose, MAX_OTP_ATTEMPTS, expiresAt, now.toISOString());
@@ -109,17 +110,17 @@ export function createOtp(
   return { success: true, otpCode };
 }
 
-export function verifyOtp(
-  db: DatabaseSync,
+export async function verifyOtp(
+  db: PaisaWiseDb | DatabaseSync | any,
   email: string,
   enteredCode: string,
   purpose: string = 'signup_verification'
-): { success: boolean; message?: string; error?: string; userId?: string } {
+): Promise<{ success: boolean; message?: string; error?: string; userId?: string }> {
   const normalizedEmail = email.trim().toLowerCase();
   const trimmedCode = enteredCode.trim();
 
   // Find the latest OTP for this email and purpose
-  const record = db.prepare(`
+  const record = await db.prepare(`
     SELECT * FROM otps 
     WHERE email = ? AND purpose = ?
     ORDER BY created_at DESC LIMIT 1
@@ -156,7 +157,7 @@ export function verifyOtp(
   // 4. Requirement 9: If the OTP is incorrect, return "Invalid OTP" with attempt tracking
   if (record.otp_code !== trimmedCode) {
     const updatedAttempts = record.attempts + 1;
-    db.prepare('UPDATE otps SET attempts = ? WHERE id = ?').run(updatedAttempts, record.id);
+    await db.prepare('UPDATE otps SET attempts = ? WHERE id = ?').run(updatedAttempts, record.id);
     const remaining = record.max_attempts - updatedAttempts;
     if (remaining <= 0) {
       return { success: false, error: 'Invalid OTP. Maximum attempts reached. This OTP is now locked. Please request a new OTP.' };
@@ -166,13 +167,13 @@ export function verifyOtp(
 
   // 5. Requirement 5: If the OTP is correct and not expired, display "Email verified successfully"
   const verifiedAt = new Date().toISOString();
-  db.prepare('UPDATE otps SET verified_at = ? WHERE id = ?').run(verifiedAt, record.id);
+  await db.prepare('UPDATE otps SET verified_at = ? WHERE id = ?').run(verifiedAt, record.id);
 
-  // Update user verified flag if user exists
+  // Update user verified flag if user exists (using TRUE for PostgreSQL and SQLite compatibility)
   if (record.user_id) {
-    db.prepare('UPDATE users SET email_verified = 1, updated_at = ? WHERE id = ?').run(verifiedAt, record.user_id);
+    await db.prepare('UPDATE users SET email_verified = TRUE, updated_at = ? WHERE id = ?').run(verifiedAt, record.user_id);
   } else {
-    db.prepare('UPDATE users SET email_verified = 1, updated_at = ? WHERE email = ?').run(verifiedAt, normalizedEmail);
+    await db.prepare('UPDATE users SET email_verified = TRUE, updated_at = ? WHERE email = ?').run(verifiedAt, normalizedEmail);
   }
 
   return { success: true, message: 'Email verified successfully', userId: record.user_id };
@@ -180,7 +181,7 @@ export function verifyOtp(
 
 // Development and Automated Testing Adapter:
 // NEVER available in production. Only for local test suites to obtain the OTP without public leakage.
-export function getDevActiveOtp(db: DatabaseSync, email: string, purpose: string = 'signup_verification'): string | null {
+export function getDevActiveOtp(db: any, email: string, purpose: string = 'signup_verification'): any {
   if (process.env.NODE_ENV === 'production') {
     return null;
   }

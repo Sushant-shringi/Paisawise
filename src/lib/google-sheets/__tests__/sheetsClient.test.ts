@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { 
   SHEETS_HEADERS, 
   formatTransactionRow, 
-  filterNewTransactions 
+  filterNewTransactions,
+  extractSpreadsheetId,
+  formatTransactionsToCsv,
+  formatTransactionsToTsv
 } from '../sheetsClient';
 import { Transaction } from '@/types';
 
@@ -79,5 +82,26 @@ describe('Google Sheets Synchronization Engine', () => {
     const existingIds = new Set<string>();
     const newOnes = filterNewTransactions(txList, existingIds);
     expect(newOnes.length).toBe(2);
+  });
+
+  it('extracts spreadsheet ID from a full Google Sheets URL', () => {
+    const url = 'https://docs.google.com/spreadsheets/d/1hgC9wdhGU68c7xdxBdltEFrBEJtXS2F1MCNJawKQ2lA/edit?gid=0#gid=0';
+    const id = extractSpreadsheetId(url);
+    expect(id).toBe('1hgC9wdhGU68c7xdxBdltEFrBEJtXS2F1MCNJawKQ2lA');
+
+    // Also supports raw ID input
+    expect(extractSpreadsheetId('1hgC9wdhGU68c7xdxBdltEFrBEJtXS2F1MCNJawKQ2lA')).toBe('1hgC9wdhGU68c7xdxBdltEFrBEJtXS2F1MCNJawKQ2lA');
+  });
+
+  it('formats transactions as valid CSV with headers', () => {
+    const csv = formatTransactionsToCsv([sampleTx]);
+    expect(csv).toContain('Transaction ID,Date,Type,Title,Category,Amount (INR),Payment Method,Notes');
+    expect(csv).toContain('tx-100,2026-10-24,EXPENSE,Grocery Store Run,Groceries,1450.5,UPI,Bought organic items');
+  });
+
+  it('formats transactions as valid TSV with headers for clipboard paste', () => {
+    const tsv = formatTransactionsToTsv([sampleTx]);
+    expect(tsv).toContain('Transaction ID\tDate\tType\tTitle\tCategory\tAmount (INR)\tPayment Method\tNotes');
+    expect(tsv).toContain('tx-100\t2026-10-24\tEXPENSE\tGrocery Store Run\tGroceries\t1450.5\tUPI\tBought organic items');
   });
 });

@@ -23,6 +23,51 @@ export const SHEETS_HEADERS = [
 ];
 
 /**
+ * Extracts Google Spreadsheet ID from either a full Google Sheets URL or raw ID string.
+ */
+export function extractSpreadsheetId(input: string): string {
+  if (!input) return '';
+  const trimmed = input.trim();
+  const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (match) return match[1];
+  return trimmed;
+}
+
+/**
+ * Exports transactions as RFC-4180 compliant CSV string for manual or automated import into Google Sheets.
+ */
+export function formatTransactionsToCsv(transactions: Transaction[]): string {
+  const rows = [
+    SHEETS_HEADERS.join(','),
+    ...transactions.map(tx => {
+      const row = formatTransactionRow(tx);
+      return row.map(val => {
+        const str = String(val ?? '');
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      }).join(',');
+    })
+  ];
+  return rows.join('\n');
+}
+
+/**
+ * Exports transactions as Tab-Separated Values (TSV) for direct clipboard paste into Google Sheets.
+ */
+export function formatTransactionsToTsv(transactions: Transaction[]): string {
+  const rows = [
+    SHEETS_HEADERS.join('\t'),
+    ...transactions.map(tx => {
+      const row = formatTransactionRow(tx);
+      return row.map(val => String(val ?? '').replace(/\t|\r?\n/g, ' ')).join('\t');
+    })
+  ];
+  return rows.join('\n');
+}
+
+/**
  * Format a single transaction into a row array for Google Sheets
  */
 export function formatTransactionRow(tx: Transaction): (string | number)[] {
