@@ -4,9 +4,21 @@
 
 **Live Production Deployment:** [https://paisawise-two.vercel.app](https://paisawise-two.vercel.app)  
 **Connected Google Sheet Integration:** [Google Sheets Ledger](https://docs.google.com/spreadsheets/d/1hgC9wdhGU68c7xdxBdltEFrBEJtXS2F1MCNJawKQ2lA/edit?gid=0#gid=0)  
-**Full Demo Video Walkthrough:** Recorded with Spoken Indian English Voiceover covering all 11 core modules (`scripts/record_full_demo.js`)
+**Full Demo Video Walkthrough:** Recorded with Spoken Indian English Voiceover covering all 11 core modules (`scripts/record_full_demo.js`)  
+**Complete Technical Documentation Suite:** [docs/README.md](docs/README.md)
 
-PaisaWise is a modern, production-grade personal finance management web application engineered for college students, freelancers, working professionals, and households. Built with a mobile-first, high-performance architecture, PaisaWise replaces scattered spreadsheets and simplistic expense trackers with a centralized financial operating system featuring real-time cash flow analytics, deterministic insights, proactive category budget guardrails, milestone savings trackers, and idempotent Google Sheets synchronization.
+---
+
+## 📖 Project Documentation Suite
+
+PaisaWise includes a comprehensive, production-grade documentation portal located in [`docs/`](docs/):
+
+- 🏛️ **[Architecture & System Design](docs/ARCHITECTURE.md)** — High-level architecture, frontend/backend component hierarchy, ER diagrams, state flow, and floating-point error elimination.
+- 📊 **[Google Sheets Integration Specification](docs/GOOGLE_SHEETS_INTEGRATION.md)** — Detailed walkthrough of the bidirectional cloud sync, 8-column RFC-4180 TSV formatting, zero-duplicate guarantee, and cell A1 paste guide.
+- 🔌 **[REST API Reference Manual](docs/API_REFERENCE.md)** — Complete OpenAPI-style reference covering authentication, OTP verification, transactions, budgets, goals, and Google Sheets endpoints.
+- 📘 **[End-User Manual & Feature Guide](docs/USER_GUIDE.md)** — Step-by-step instructions for the Financial Cockpit, UPI expense logging, budget warnings, milestone contributions, and theme customization.
+- 🚀 **[Deployment & Development Guide](docs/DEPLOYMENT_AND_DEV_GUIDE.md)** — Comprehensive local environment setup, environment variables guide, Supabase PostgreSQL configuration, Gmail SMTP setup, and Vercel serverless deployment.
+- 🎥 **[Automated Demo Video Pipeline](docs/DEMO_VIDEO_GUIDE.md)** — Architecture and usage of the automated Playwright browser recording, Google TTS Indian voiceover synthesis, and FFmpeg muxing engine.
 
 ---
 
