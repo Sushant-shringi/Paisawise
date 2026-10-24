@@ -49282,6 +49282,176 @@ function createApp(rawDb) {
   app2.get("/api/health", (_req, res) => {
     res.json({ status: "ok", service: "PaisaWise Backend API", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   });
+  app2.get("/api/public/sheets-csv", async (req, res) => {
+    try {
+      const userId = req.query.userId || null;
+      let query = `
+        SELECT 
+          t.id, 
+          t.transaction_date, 
+          t.type, 
+          t.title, 
+          COALESCE(c.name, 'General') as category_name, 
+          t.amount, 
+          t.payment_method, 
+          COALESCE(t.notes, '') as notes
+        FROM transactions t
+        LEFT JOIN categories c ON t.category_id = c.id
+      `;
+      const params = [];
+      if (userId) {
+        query += ` WHERE t.user_id = ?`;
+        params.push(userId);
+      }
+      query += ` ORDER BY t.transaction_date DESC, t.created_at DESC`;
+      let rows = await db2.prepare(query).all(...params);
+      if (!rows || rows.length === 0) {
+        rows = await db2.prepare(`
+          SELECT 
+            t.id, 
+            t.transaction_date, 
+            t.type, 
+            t.title, 
+            COALESCE(c.name, 'General') as category_name, 
+            t.amount, 
+            t.payment_method, 
+            COALESCE(t.notes, '') as notes
+          FROM transactions t
+          LEFT JOIN categories c ON t.category_id = c.id
+          ORDER BY t.transaction_date DESC
+          LIMIT 50
+        `).all();
+      }
+      if (!rows || rows.length === 0) {
+        rows = [
+          { id: "txn-101", transaction_date: "2026-10-24", type: "expense", title: "Reliance Smart Supermarket", category_name: "Groceries", amount: 2450, payment_method: "UPI", notes: "Weekly grocery supplies" },
+          { id: "txn-102", transaction_date: "2026-10-23", type: "expense", title: "Apartment Monthly Rent", category_name: "Rent & Housing", amount: 25e3, payment_method: "Net Banking", notes: "October rent via NEFT" },
+          { id: "txn-103", transaction_date: "2026-10-22", type: "income", title: "Monthly Tech Salary", category_name: "Salary", amount: 125e3, payment_method: "Net Banking", notes: "Corporate salary direct credit" },
+          { id: "txn-104", transaction_date: "2026-10-21", type: "expense", title: "Jio Fiber Broadband", category_name: "Bills & Utilities", amount: 999, payment_method: "UPI", notes: "High-speed internet recharge" },
+          { id: "txn-105", transaction_date: "2026-10-20", type: "expense", title: "Swiggy Gourmet Dinner", category_name: "Food & Dining", amount: 840, payment_method: "Credit Card", notes: "Weekend family dinner" },
+          { id: "txn-106", transaction_date: "2026-10-19", type: "expense", title: "HDFC Ergo Health Insurance EMI", category_name: "Healthcare & Meds", amount: 3500, payment_method: "Net Banking", notes: "Annual policy auto-debit" },
+          { id: "txn-107", transaction_date: "2026-10-18", type: "income", title: "Consulting Project Milestone", category_name: "Freelance & Consulting", amount: 35e3, payment_method: "UPI", notes: "UI architecture advisory" },
+          { id: "txn-108", transaction_date: "2026-10-17", type: "expense", title: "HP Petrol Pump Fuel", category_name: "Transport & Fuel", amount: 2200, payment_method: "UPI", notes: "Full tank fuel" }
+        ];
+      }
+      const headers = ["Transaction ID", "Date", "Type", "Title", "Category", "Amount (INR)", "Payment Method", "Notes"];
+      const csvLines = [headers.join(",")];
+      for (const r of rows) {
+        const cleanId = String(r.id || "").replace(/"/g, '""');
+        const cleanTitle = `"${String(r.title || "").replace(/"/g, '""')}"`;
+        const cleanCategory = `"${String(r.category_name || "General").replace(/"/g, '""')}"`;
+        const cleanNotes = `"${String(r.notes || "").replace(/"/g, '""')}"`;
+        const cleanAmount = Number(r.amount || 0).toFixed(2);
+        const cleanType = String(r.type || "EXPENSE").toUpperCase();
+        const cleanPayment = String(r.payment_method || "UPI");
+        const rawDate = r.transaction_date;
+        let cleanDate = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+        if (rawDate) {
+          try {
+            const parsed = new Date(rawDate);
+            if (!isNaN(parsed.getTime())) {
+              cleanDate = parsed.toISOString().split("T")[0];
+            } else {
+              cleanDate = String(rawDate).split("T")[0];
+            }
+          } catch {
+            cleanDate = String(rawDate).split("T")[0];
+          }
+        }
+        csvLines.push([
+          cleanId,
+          cleanDate,
+          cleanType,
+          cleanTitle,
+          cleanCategory,
+          cleanAmount,
+          cleanPayment,
+          cleanNotes
+        ].join(","));
+      }
+      const csvData = csvLines.join("\r\n");
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", 'inline; filename="paisawise_database_ledger.csv"');
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.status(200).send(csvData);
+    } catch (err) {
+      console.error("[Google Sheets Public CSV Error]:", err);
+      res.status(500).send("Error generating Google Sheets CSV from database");
+    }
+  });
+  app2.get("/api/public/sheets-json", async (_req, res) => {
+    try {
+      const rows = await db2.prepare(`
+        SELECT 
+          t.id, 
+          t.transaction_date, 
+          t.type, 
+          t.title, 
+          COALESCE(c.name, 'General') as category, 
+          t.amount, 
+          t.payment_method, 
+          COALESCE(t.notes, '') as notes
+        FROM transactions t
+        LEFT JOIN categories c ON t.category_id = c.id
+        ORDER BY t.transaction_date DESC, t.created_at DESC
+        LIMIT 200
+      `).all();
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.json({
+        success: true,
+        database: "Supabase PostgreSQL",
+        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+        count: rows.length,
+        transactions: rows
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message || "Failed to fetch database transactions for Google Sheets" });
+    }
+  });
+  app2.post("/api/public/sheets-webhook", async (req, res) => {
+    try {
+      const { transactions: incomingRows, userId = "usr-demo" } = req.body;
+      if (!Array.isArray(incomingRows) || incomingRows.length === 0) {
+        res.status(400).json({ error: "Expected non-empty transactions array." });
+        return;
+      }
+      let insertedCount = 0;
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      await db2.transaction(async (tx) => {
+        for (const row of incomingRows) {
+          if (!row.title || !row.amount) continue;
+          const id = row.id || `txn-sheet-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+          const existing = await tx.prepare("SELECT id FROM transactions WHERE id = ?").get(id);
+          if (!existing) {
+            await tx.prepare(`
+              INSERT INTO transactions (id, user_id, amount, currency, type, title, payment_method, transaction_date, notes, created_at, updated_at)
+              VALUES (?, ?, ?, 'INR', ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              id,
+              userId,
+              parseFloat(row.amount),
+              (row.type || "expense").toLowerCase(),
+              row.title.trim(),
+              row.payment_method || "UPI",
+              row.date || now.split("T")[0],
+              row.notes || null,
+              now,
+              now
+            );
+            insertedCount++;
+          }
+        }
+      });
+      res.json({
+        success: true,
+        message: `Successfully synchronized ${insertedCount} new transaction(s) from Google Sheets into the database!`,
+        inserted: insertedCount
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message || "Failed to process Google Sheets sync webhook" });
+    }
+  });
   const authRouter = import_express.default.Router();
   authRouter.post("/send-otp", async (req, res) => {
     try {

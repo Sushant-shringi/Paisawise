@@ -64,7 +64,89 @@ If a user's browser blocks automated clipboard access (`navigator.clipboard`), P
 
 ---
 
-### Mode B: Google Sheets REST API v4 (Automated Cloud Sync)
+### Mode B: Direct Database Formula Connection (Live Real-Time Sync)
+Google Sheets can connect directly to the PaisaWise Supabase PostgreSQL database using the native `=IMPORTDATA` formula.
+
+```excel
+=IMPORTDATA("https://paisawise-two.vercel.app/api/public/sheets-csv")
+```
+
+#### How it works:
+1. Open your Google Sheet ([https://docs.google.com/spreadsheets/d/1hgC9wdhGU68c7xdxBdltEFrBEJtXS2F1MCNJawKQ2lA/edit](https://docs.google.com/spreadsheets/d/1hgC9wdhGU68c7xdxBdltEFrBEJtXS2F1MCNJawKQ2lA/edit)).
+2. Single-click cell **A1**.
+3. Type or paste `=IMPORTDATA("https://paisawise-two.vercel.app/api/public/sheets-csv")` and press Enter.
+4. Google Sheets sends an automated HTTP request to the PaisaWise backend, which queries the Supabase PostgreSQL database in real time.
+5. All 8 columns and all transaction rows populate the sheet automatically. Whenever the sheet is opened or recalculated, Google Sheets refreshes data from the database.
+
+---
+
+### Mode C: Automated Google Apps Script Database Bridge (Custom Menu)
+For users who want automated styling, auto-column resizing, and a dedicated menu button inside Google Sheets:
+
+1. In your Google Sheet, click **Extensions > Apps Script**.
+2. Paste the following script and click **Save (Ctrl+S)**:
+
+```javascript
+/**
+ * PaisaWise Database to Google Sheets Synchronizer
+ * Automatically synchronizes transactions from Supabase PostgreSQL into Google Sheets.
+ */
+function syncPaisaWiseDatabase() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = spreadsheet.getSheetByName("PaisaWise_Transactions") || spreadsheet.getActiveSheet();
+  var apiUrl = "https://paisawise-two.vercel.app/api/public/sheets-csv";
+  
+  var response = UrlFetchApp.fetch(apiUrl, {
+    method: "get",
+    headers: { "Accept": "text/csv" },
+    muteHttpExceptions: true
+  });
+  
+  if (response.getResponseCode() !== 200) {
+    SpreadsheetApp.getUi().alert("Error fetching database records: HTTP " + response.getResponseCode());
+    return;
+  }
+  
+  var csvData = Utilities.parseCsv(response.getContentText());
+  if (!csvData || csvData.length === 0) {
+    SpreadsheetApp.getUi().alert("No transactions found in database.");
+    return;
+  }
+  
+  sheet.clearContents();
+  sheet.getRange(1, 1, csvData.length, csvData[0].length).setValues(csvData);
+  
+  // Format Header Row in Emerald Green
+  var headerRange = sheet.getRange(1, 1, 1, csvData[0].length);
+  headerRange.setFontWeight("bold")
+             .setBackground("#059669")
+             .setFontColor("#ffffff")
+             .setHorizontalAlignment("center");
+  
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, csvData[0].length);
+  
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    "Successfully synchronized " + (csvData.length - 1) + " transactions from Supabase PostgreSQL!",
+    "PaisaWise DB Sync Complete",
+    5
+  );
+}
+
+function onOpen() {
+  var ui = SpreadsheetApp.getUi();
+  ui.createMenu("⚡ PaisaWise DB")
+    .addItem("🔄 Sync Database to Sheet Now", "syncPaisaWiseDatabase")
+    .addToUi();
+}
+```
+
+3. Reload the Google Sheet. A new custom menu **"⚡ PaisaWise DB"** appears in the top menu bar.
+4. Click **"🔄 Sync Database to Sheet Now"** to pull live records directly from PostgreSQL into your spreadsheet.
+
+---
+
+### Mode D: Google Sheets REST API v4 (OAuth GIS Sync)
 For automated background synchronization:
 1. User provides their Spreadsheet URL or Spreadsheet ID.
 2. PaisaWise uses Google Identity Services (GIS) OAuth 2.0 with the `https://www.googleapis.com/auth/spreadsheets` scope.

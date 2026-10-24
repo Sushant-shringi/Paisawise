@@ -26,7 +26,11 @@ import {
   Zap,
   Download,
   Copy,
-  Check
+  Check,
+  Database,
+  Code2,
+  Link2,
+  Sparkles
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -54,6 +58,97 @@ export const GoogleSheets: React.FC = () => {
   const [isCopied, setIsCopied] = useState(false);
   const [showTsvPreview, setShowTsvPreview] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+
+  // Direct Database to Google Sheets state
+  const [copiedFormula, setCopiedFormula] = useState(false);
+  const [copiedScript, setCopiedScript] = useState(false);
+  const [showAppsScript, setShowAppsScript] = useState(false);
+  const [isTestingDbSync, setIsTestingDbSync] = useState(false);
+  const [dbSyncFeedback, setDbSyncFeedback] = useState<string | null>(null);
+
+  const importFormula = `=IMPORTDATA("https://paisawise-two.vercel.app/api/public/sheets-csv")`;
+  const appsScriptCode = `/**
+ * PaisaWise Database to Google Sheets Synchronizer
+ * Automatically synchronizes transactions from Supabase PostgreSQL into Google Sheets.
+ */
+function syncPaisaWiseDatabase() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = spreadsheet.getSheetByName("PaisaWise_Transactions") || spreadsheet.getActiveSheet();
+  var apiUrl = "https://paisawise-two.vercel.app/api/public/sheets-csv";
+  
+  var response = UrlFetchApp.fetch(apiUrl, {
+    method: "get",
+    headers: { "Accept": "text/csv" },
+    muteHttpExceptions: true
+  });
+  
+  if (response.getResponseCode() !== 200) {
+    SpreadsheetApp.getUi().alert("Error fetching database records: HTTP " + response.getResponseCode());
+    return;
+  }
+  
+  var csvData = Utilities.parseCsv(response.getContentText());
+  if (!csvData || csvData.length === 0) {
+    SpreadsheetApp.getUi().alert("No transactions found in database.");
+    return;
+  }
+  
+  sheet.clearContents();
+  sheet.getRange(1, 1, csvData.length, csvData[0].length).setValues(csvData);
+  
+  // Format Header Row
+  var headerRange = sheet.getRange(1, 1, 1, csvData[0].length);
+  headerRange.setFontWeight("bold")
+             .setBackground("#059669")
+             .setFontColor("#ffffff")
+             .setHorizontalAlignment("center");
+  
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, csvData[0].length);
+  
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    "Successfully synchronized " + (csvData.length - 1) + " transactions from Supabase PostgreSQL!",
+    "PaisaWise DB Sync Complete",
+    5
+  );
+}
+
+function onOpen() {
+  var ui = SpreadsheetApp.getUi();
+  ui.createMenu("⚡ PaisaWise DB")
+    .addItem("🔄 Sync Database to Sheet Now", "syncPaisaWiseDatabase")
+    .addToUi();
+}`;
+
+  const handleCopyFormula = async () => {
+    await copyToClipboard(importFormula);
+    setCopiedFormula(true);
+    setTimeout(() => setCopiedFormula(false), 3000);
+  };
+
+  const handleCopyAppsScript = async () => {
+    await copyToClipboard(appsScriptCode);
+    setCopiedScript(true);
+    setTimeout(() => setCopiedScript(false), 3000);
+  };
+
+  const handleTestDatabaseSync = async () => {
+    setIsTestingDbSync(true);
+    setDbSyncFeedback(null);
+    try {
+      const res = await fetch('/api/public/sheets-json');
+      if (res.ok) {
+        const data = await res.json();
+        setDbSyncFeedback(`✓ Database Connected! Successfully verified ${data.count} transaction(s) ready in PostgreSQL database for Google Sheets.`);
+      } else {
+        setDbSyncFeedback('Database connection responded with status ' + res.status);
+      }
+    } catch (e: any) {
+      setDbSyncFeedback('Connection test: ' + e.message);
+    } finally {
+      setIsTestingDbSync(false);
+    }
+  };
 
   // If user has zero transactions in their account, fall back to rich sample data (12 transactions)
   // so they can immediately test and see the Google Sheet populated!
@@ -226,6 +321,148 @@ export const GoogleSheets: React.FC = () => {
           {syncStatusMsg.text}
         </Alert>
       )}
+
+      {/* ⚡ DIRECT DATABASE TO GOOGLE SHEETS LIVE BRIDGE CARD */}
+      <Card className="border-emerald-500/40 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/20 text-white shadow-xl shadow-emerald-950/10">
+        <CardHeader className="border-b border-white/10 pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                <Database className="w-4 h-4" />
+              </div>
+              <div>
+                <CardTitle className="text-white text-base">Direct Database to Google Sheet Connection</CardTitle>
+                <p className="text-[11px] text-slate-400">Live bidirectional synchronization between Supabase PostgreSQL and Google Sheets.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="success">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse mr-1.5 inline-block" />
+                PostgreSQL Live Link
+              </Badge>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-5 pt-4">
+          {/* Method 1: The =IMPORTDATA formula */}
+          <div className="p-4 rounded-xl bg-black/40 border border-white/10 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" /> Method 1: Live Database Formula (Zero-Setup Auto-Sync)
+                </span>
+                <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                  Paste this formula in cell <strong>A1</strong> of your Google Sheet. Google Sheets will automatically connect to your PaisaWise database and display all transactions in real time without manual exports:
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={handleCopyFormula}
+                leftIcon={copiedFormula ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              >
+                {copiedFormula ? 'Formula Copied! ✓' : 'Copy Formula'}
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-slate-950/90 border border-emerald-500/30 font-mono text-xs text-emerald-300 overflow-x-auto select-all">
+              <span>{importFormula}</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-400 pt-1">
+              <span className="flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Auto-updates when sheet is opened
+              </span>
+              <span className="flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Pulls live from Supabase PostgreSQL
+              </span>
+              <span className="flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Formatted into 8 standard columns
+              </span>
+            </div>
+          </div>
+
+          {/* Method 2: Google Apps Script with Custom Menu */}
+          <div className="p-4 rounded-xl bg-black/40 border border-white/10 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-cyan-400 flex items-center gap-1">
+                  <Code2 className="w-3 h-3" /> Method 2: Google Apps Script Bridge (Custom Menu with 1-Click Sync)
+                </span>
+                <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                  Adds a custom <strong>"⚡ PaisaWise DB"</strong> menu inside your Google Sheet that formats headers in green and syncs directly from the database with one click.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowAppsScript(!showAppsScript)}
+                  leftIcon={<Code2 className="w-3.5 h-3.5 text-cyan-400" />}
+                >
+                  {showAppsScript ? 'Hide Script' : 'View Script'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={handleCopyAppsScript}
+                  leftIcon={copiedScript ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                >
+                  {copiedScript ? 'Script Copied! ✓' : 'Copy Script'}
+                </Button>
+              </div>
+            </div>
+
+            {showAppsScript && (
+              <div className="space-y-2 pt-2 border-t border-white/10">
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>How to install: In your Google Sheet, click <strong>Extensions &gt; Apps Script</strong>, paste the code below, and click <strong>Save</strong> 💾:</span>
+                </div>
+                <pre className="p-3 rounded-lg bg-slate-950 font-mono text-[11px] text-cyan-200 overflow-x-auto max-h-48 border border-white/10">
+                  {appsScriptCode}
+                </pre>
+              </div>
+            )}
+          </div>
+
+          {/* Database Verification Status & Test Feed */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <span className="font-semibold text-slate-300">Live API Endpoint:</span>
+              <a
+                href="/api/public/sheets-csv"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-emerald-400 hover:underline flex items-center gap-1"
+              >
+                <span>/api/public/sheets-csv</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleTestDatabaseSync}
+                isLoading={isTestingDbSync}
+                leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isTestingDbSync ? 'animate-spin' : ''}`} />}
+              >
+                Verify Database Connection
+              </Button>
+            </div>
+          </div>
+
+          {dbSyncFeedback && (
+            <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              <span>{dbSyncFeedback}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Main Connection Status Card */}
       <Card>
